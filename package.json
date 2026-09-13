@@ -10,8 +10,13 @@
   },
   "files": [
     "src",
+    "schema",
+    "types",
     "product.yml"
   ],
+  "exports": {
+    "./types/*": "./types/*"
+  },
   "engines": {
     "node": ">=24"
   },

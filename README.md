@@ -19,6 +19,7 @@
   - [Authors](#authors)
 - [Usage](#usage)
 - [Installation](#installation)
+- [Editor setup](#editor-setup)
 - [Feedback and Contributing](#feedback-and-contributing)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -81,6 +82,37 @@ npm install --save-dev @twext/twext
 ```
 
 Requires Node.js 24 or newer.
+
+## Editor setup
+
+VS Code autocompletes and validates `twext.yml` once you register its JSON schema. Install the [YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml) (by Red Hat) and add this to your workspace:
+
+```jsonc
+// .vscode/settings.json
+{
+  "yaml.schemas": {
+    "./node_modules/twext/schema/twext.json": ["twext.yml"],
+  },
+}
+```
+
+For extension files, use `import("twext/types/extension")` in a JSDoc comment and enable JavaScript checking:
+
+```jsonc
+// jsconfig.json
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "noEmit": true,
+  },
+}
+```
+
+```js
+// src/index.js
+/** @type {import("twext/types/extension").Blocks} */
+export const blocks = { hello };
+```
 
 ## Feedback and Contributing
 
