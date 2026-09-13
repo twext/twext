@@ -64,8 +64,14 @@ function parentDirs(dir, rel) {
 
 export function initCommand(product, target, force, log) {
   const dir = resolve(target ?? ".");
-  if (existsSync(dir) && !statSync(dir).isDirectory()) {
-    log.error(`${relative(process.cwd(), dir)} exists and is not a directory`);
+  let existing = dir;
+  while (!existsSync(existing)) {
+    const parent = dirname(existing);
+    if (parent === existing) break;
+    existing = parent;
+  }
+  if (!statSync(existing).isDirectory()) {
+    log.error(`${relative(process.cwd(), existing)} exists and is not a directory`);
     return false;
   }
   const conflicts = [];

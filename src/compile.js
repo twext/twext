@@ -26,6 +26,10 @@ export const ARGUMENT_TYPES = {
 
 const INDENT = "  ";
 
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 function validIdentifier(name) {
   return /^[A-Za-z_$][\w$]*$/.test(name);
 }
@@ -211,11 +215,18 @@ function indentCode(text, level) {
 }
 
 export function pascalCase(text) {
-  return String(text).replace(/[^A-Za-z0-9]+(.)/g, (_, c) => c.toUpperCase());
+  return String(text)
+    .replace(/[^A-Za-z0-9]+(.)/g, (_, c) => c.toUpperCase())
+    .replace(/^[a-z]/, (c) => c.toUpperCase());
 }
 
 function buildBlock(block) {
-  const type = block.blockType == null ? BLOCK_TYPES.reporter : BLOCK_TYPES[block.blockType];
+  const type =
+    block.blockType == null
+      ? BLOCK_TYPES.reporter
+      : hasOwn(BLOCK_TYPES, block.blockType)
+        ? BLOCK_TYPES[block.blockType]
+        : undefined;
   if (!type) throw new Error(`Unknown blockType "${block.blockType}" for block "${block.opcode}"`);
   const isLabel = type === BLOCK_TYPES.label;
   const out = isLabel
@@ -234,7 +245,10 @@ function buildBlock(block) {
 }
 
 function buildArgument(argument) {
-  const out = { type: enumCode(ARGUMENT_TYPES[argument.type] ?? ARGUMENT_TYPES.string) };
+  const type = hasOwn(ARGUMENT_TYPES, argument.type)
+    ? ARGUMENT_TYPES[argument.type]
+    : ARGUMENT_TYPES.string;
+  const out = { type: enumCode(type) };
   if (argument.defaultValue !== undefined) out.defaultValue = argument.defaultValue;
   return out;
 }

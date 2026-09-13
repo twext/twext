@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { loadProduct } from "../src/config.js";
 import { loadProject } from "../src/project.js";
-import { compileExtension } from "../src/compile.js";
+import { compileExtension, pascalCase } from "../src/compile.js";
 import { validateProject } from "../src/validate.js";
 
 const fixture = (name) => fileURLToPath(new URL(`../test-fixtures/${name}`, import.meta.url));
@@ -22,6 +22,7 @@ function executeExtension(code) {
       },
     },
   };
+  global.__registered = undefined;
   vm.runInThisContext(code, { filename: "extension.js" });
   return global.__registered;
 }
@@ -245,6 +246,12 @@ blocks:
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("pascalCase capitalizes the first character", () => {
+  assert.equal(pascalCase("super-utilities"), "SuperUtilities");
+  assert.equal(pascalCase("hello world"), "HelloWorld");
+  assert.equal(pascalCase("123-tools"), "123Tools");
 });
 
 test("compile sanitizes class names derived from numeric-like ids", async () => {

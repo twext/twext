@@ -8,6 +8,6 @@ export async function validateCommand(product, configPath, log) {
     return false;
   }
   const count = result.project.config.blocks.length;
-  log.info(`${product.symbols.success} ${count} block${count === 1 ? "" : "s"} validated`);
+  log.success(`${count} block${count === 1 ? "" : "s"} validated`);
   return true;
 }

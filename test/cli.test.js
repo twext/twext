@@ -59,6 +59,19 @@ test("init refuses to run when a template parent path is a file", () => {
   }
 });
 
+test("init refuses a target under an existing-file ancestor", () => {
+  const { dir, cleanup } = tmpProject();
+  try {
+    writeFileSync(join(dir, "sub"), "not a directory", "utf8");
+    const result = runCli(["init", "sub/proj"], dir);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /not a directory/);
+    assert.ok(!existsSync(join(dir, "sub", "proj", "twext.yml")), "no files should be written");
+  } finally {
+    cleanup();
+  }
+});
+
 test("validate rejects a broken project and exits nonzero", () => {
   const result = runCli(["validate"], fixture("broken"));
   assert.equal(result.status, 1);
