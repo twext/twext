@@ -81,6 +81,12 @@ Or add it to a single project's dev dependencies:
 npm install --save-dev @twext/twext
 ```
 
+Then run it with `npx`:
+
+```bash
+npx twext init
+```
+
 Requires Node.js 24 or newer.
 
 ## Editor setup
@@ -91,12 +97,12 @@ VS Code autocompletes and validates `twext.yml` once you register its JSON schem
 // .vscode/settings.json
 {
   "yaml.schemas": {
-    "./node_modules/twext/schema/twext.json": ["twext.yml"],
+    "./node_modules/@twext/twext/schema/twext.json": ["twext.yml"],
   },
 }
 ```
 
-For extension files, use `import("twext/types/extension")` in a JSDoc comment and enable JavaScript checking:
+For extension files, use `import("@twext/twext/types/extension")` in a JSDoc comment and enable JavaScript checking:
 
 ```jsonc
 // jsconfig.json
@@ -110,7 +116,8 @@ For extension files, use `import("twext/types/extension")` in a JSDoc comment an
 
 ```js
 // src/index.js
-/** @type {import("twext/types/extension").Blocks} */
+/** @type {import("@twext/twext/types/extension").Blocks} */
+const hello = (args, util) => "Hello, world!";
 export const blocks = { hello };
 ```
 

@@ -54,6 +54,18 @@ test("async arrow", () => {
 test("bare single-parameter arrow", () => {
   const parsed = parseFunctionSource(`x => x + 1`);
   assert.equal(parsed.params, "x");
+  assert.equal(parsed.expressionBody, true);
+  assert.equal(parsed.body, "x + 1");
+});
+
+test("bare single-parameter arrow with block body", () => {
+  const parsed = parseFunctionSource(`value => {
+  return value * 2;
+}`);
+  assert.equal(parsed.async, false);
+  assert.equal(parsed.params, "value");
+  assert.equal(parsed.expressionBody, false);
+  assert.match(parsed.body, /return value \* 2;/);
 });
 
 test("params with default object braces", () => {

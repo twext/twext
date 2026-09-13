@@ -11,6 +11,7 @@ const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const RESERVED_WORDS = new Set([
   "await",
+  "arguments",
   "break",
   "case",
   "catch",
@@ -23,6 +24,7 @@ const RESERVED_WORDS = new Set([
   "do",
   "else",
   "enum",
+  "eval",
   "export",
   "extends",
   "false",
@@ -75,7 +77,7 @@ export async function validateProject(configPath) {
     errors.push('twext.yml must define an "extension" section');
   } else {
     const ext = config.extension;
-    if (typeof ext.id !== "string" || !ext.id) {
+    if (typeof ext.id !== "string" || !ext.id.trim()) {
       errors.push("extension.id is required and must be a non-empty string");
     }
     if (!ext.name) {
@@ -122,14 +124,18 @@ export async function validateProject(configPath) {
           errors.push(`Opcode "${block.opcode}" conflicts with a generated extension method`);
         }
         declared.add(block.opcode);
-        if (typeof mod.blocks[block.opcode] !== "function") {
+        if (typeof mod.blocks[block.opcode] !== "function" || !hasOwn(mod.blocks, block.opcode)) {
           errors.push(
             `Block "${block.opcode}" has no handler function exported in the "blocks" map`,
           );
         }
       }
       const name = block.opcode ?? block.text ?? "(unnamed block)";
-      if (block.blockType && !hasOwn(BLOCK_TYPES, block.blockType)) {
+      if (
+        block.blockType !== undefined &&
+        block.blockType !== null &&
+        !hasOwn(BLOCK_TYPES, block.blockType)
+      ) {
         errors.push(`Block "${name}" uses unknown blockType "${block.blockType}"`);
       }
       if (block.text !== undefined && typeof block.text !== "string") {

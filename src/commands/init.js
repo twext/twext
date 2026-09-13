@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 function templateYml(fallbackColor) {
@@ -52,16 +52,38 @@ const FILES = {
   "src/blocks/hello.js": () => templateHello(),
 };
 
+function parentDirs(dir, rel) {
+  const out = [];
+  let parent = dirname(join(dir, rel));
+  while (parent !== dir) {
+    out.push(parent);
+    parent = dirname(parent);
+  }
+  return out;
+}
+
 export function initCommand(product, target, force, log) {
   const dir = resolve(target ?? ".");
+  if (existsSync(dir) && !statSync(dir).isDirectory()) {
+    log.error(`${relative(process.cwd(), dir)} exists and is not a directory`);
+    return false;
+  }
   const conflicts = [];
   for (const rel of Object.keys(FILES)) {
     if (existsSync(join(dir, rel)) && !force) conflicts.push(rel);
   }
-  if (conflicts.length > 0) {
+  const blockedParents = new Set();
+  for (const rel of Object.keys(FILES)) {
+    for (const parent of parentDirs(dir, rel)) {
+      if (existsSync(parent) && !statSync(parent).isDirectory()) blockedParents.add(parent);
+    }
+  }
+  if (conflicts.length > 0 || blockedParents.size > 0) {
     for (const rel of conflicts)
       log.error(`${relative(process.cwd(), resolve(dir, rel))} already exists`);
-    log.info(`Use -f to overwrite existing files.`);
+    for (const parent of blockedParents)
+      log.error(`${relative(process.cwd(), parent)} exists and is not a directory`);
+    if (conflicts.length > 0) log.info(`Use -f to overwrite existing files.`);
     return false;
   }
   mkdirSync(dir, { recursive: true });

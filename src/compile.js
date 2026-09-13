@@ -34,12 +34,15 @@ function methodName(name) {
   return validIdentifier(name) ? name : JSON.stringify(name);
 }
 
+const ENUM_MARKER = Symbol("enum");
+
+function enumCode(value) {
+  return { [ENUM_MARKER]: value };
+}
+
 function renderScalar(value) {
   if (value === null || value === undefined) return "null";
-  if (typeof value === "string") {
-    if (/^Scratch\.(BlockType|ArgumentType)\.[A-Z_]+$/.test(value)) return value;
-    return JSON.stringify(value);
-  }
+  if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return JSON.stringify(String(value));
 }
@@ -47,6 +50,9 @@ function renderScalar(value) {
 function emitKey(key, value, level) {
   const name = validIdentifier(key) ? key : JSON.stringify(key);
   const pad = INDENT.repeat(level);
+  if (value !== null && typeof value === "object" && value[ENUM_MARKER]) {
+    return [`${pad}${name}: ${value[ENUM_MARKER]},`];
+  }
   if (value === null || typeof value !== "object") {
     return [`${pad}${name}: ${renderScalar(value)},`];
   }
@@ -91,7 +97,7 @@ export function resolveSetup(setup) {
   if (typeof setup === "string") return setup;
   if (typeof setup === "function") {
     const parsed = parseFunctionSource(setup.toString());
-    if (!parsed) return "";
+    if (!parsed) throw new Error("Could not parse setup function");
     return parsed.expressionBody ? `${parsed.body};` : parsed.body;
   }
   if (Array.isArray(setup)) return setup.map(resolveSetup).join("\n");
@@ -107,7 +113,9 @@ function markStringContentLines(text) {
   let braceDepth = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    if (state === "template" || state === "comment") content[i] = true;
+    if (state === "template" || state === "comment" || state === "string") {
+      content[i] = true;
+    }
     const line = lines[i];
     let j = 0;
     while (j < line.length) {
@@ -208,13 +216,11 @@ export function pascalCase(text) {
 
 function buildBlock(block) {
   const type = block.blockType == null ? BLOCK_TYPES.reporter : BLOCK_TYPES[block.blockType];
-  if (!type) {
-    throw new Error(`Unknown blockType "${block.blockType}" for block "${block.opcode}"`);
-  }
+  if (!type) throw new Error(`Unknown blockType "${block.blockType}" for block "${block.opcode}"`);
   const isLabel = type === BLOCK_TYPES.label;
   const out = isLabel
-    ? { blockType: type, text: block.text ?? "" }
-    : { opcode: block.opcode, blockType: type, text: block.text ?? block.opcode };
+    ? { blockType: enumCode(type), text: block.text ?? "" }
+    : { opcode: block.opcode, blockType: enumCode(type), text: block.text ?? block.opcode };
   if (block.arguments && typeof block.arguments === "object") {
     const argumentNames = Object.keys(block.arguments);
     if (argumentNames.length > 0) {
@@ -228,7 +234,7 @@ function buildBlock(block) {
 }
 
 function buildArgument(argument) {
-  const out = { type: ARGUMENT_TYPES[argument.type] ?? ARGUMENT_TYPES.string };
+  const out = { type: enumCode(ARGUMENT_TYPES[argument.type] ?? ARGUMENT_TYPES.string) };
   if (argument.defaultValue !== undefined) out.defaultValue = argument.defaultValue;
   return out;
 }
@@ -252,7 +258,7 @@ export function compileExtension(project, product) {
   const fallback = product?.defaults?.fallbackColor ?? "#0070F3";
   const derived = pascalCase(ext.id || "Extension") + "Extension";
   const rawClassName = ext.className || derived;
-  const className = validIdentifier(rawClassName) ? rawClassName : `_${rawClassName}`;
+  const className = validIdentifier(rawClassName) ? rawClassName : `_${pascalCase(rawClassName)}`;
 
   const info = {
     id: ext.id,

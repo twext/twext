@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +41,19 @@ test("init scaffolds a project that builds", () => {
 
     assert.equal(runCli(["init"], dir).status, 1, "init refuses to overwrite");
     assert.equal(runCli(["init", "-f"], dir).status, 0, "init -f overwrites");
+  } finally {
+    cleanup();
+  }
+});
+
+test("init refuses to run when a template parent path is a file", () => {
+  const { dir, cleanup } = tmpProject();
+  try {
+    writeFileSync(join(dir, "src"), "not a directory", "utf8");
+    const result = runCli(["init", "-f"], dir);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /not a directory/);
+    assert.ok(!existsSync(join(dir, "twext.yml")), "no files should be written");
   } finally {
     cleanup();
   }

@@ -8,7 +8,7 @@ export type Util = Record<string, unknown>;
 export type Handler<A extends HandlerArgs = HandlerArgs> = (args: A, util: Util) => unknown;
 
 /** A map of opcode -> handler. Your entryPoint exports this as `blocks`. */
-export type Blocks = Record<string, Handler>;
+export type Blocks = Record<string, Handler<any>>;
 
 /** Code run once when the extension loads. Also accepts raw source strings. */
 export type Setup = (() => void) | string | string[];

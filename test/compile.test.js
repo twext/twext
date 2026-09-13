@@ -215,6 +215,38 @@ blocks:
   assert.ok(result.errors.some((e) => e.includes("cannot be derived from the id")));
 });
 
+test("backslash-continued strings keep their whitespace through indentCode", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "twext-strcont-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(
+      join(dir, "twext.yml"),
+      `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: strContDemo
+  name: "Str Cont"
+blocks:
+  - opcode: block
+    blockType: reporter
+    text: "block"
+`,
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "src", "index.js"),
+      'export const blocks = { block() { return "a\\\n    b"; } };\n',
+      "utf8",
+    );
+
+    const project = await loadProject(join(dir, "twext.yml"));
+    const code = compileExtension(project, loadProduct());
+    assert.equal(executeExtension(code).block({}), "a    b");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("compile sanitizes class names derived from numeric-like ids", async () => {
   const dir = mkdtempSync(join(tmpdir(), "twext-classname-"));
   try {

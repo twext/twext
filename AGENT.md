@@ -96,7 +96,7 @@ Read it back and ask: would a maintainer who just wrote this by hand, half-tired
 
 ## Writing code that doesn't read as AI-generated
 
-Detectors (and reviewers) key on surface polish more than on logic. A classifier restricted to nothing but formatting — comment density, docstring presence, indentation regularity, whitespace — can already tell generated code from human code most of the time. Write less scaffolding, not different scaffolding.
+Detectors (and reviewers) key on surface polish more than on logic. Match the surrounding file's existing style and conventions — comment density, docstring presence, whitespace, import ordering — rather than defaulting to a generic style. Write less scaffolding, not different scaffolding.
 
 ### Comments
 
