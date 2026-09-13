@@ -1,0 +1,89 @@
+<a href="https://github.com/nvm-sh/logos">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/whiteLogo.svg" />
+    <img src="./assets/regularLogo.svg" height="40" alt="nvm project logo" />
+  </picture>
+</a>
+
+# Twext
+
+> A modular, zero-config Node.js toolchain for authoring, validating, and compiling multi-file TurboWarp extensions with YAML manifests
+
+## Table of Contents
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+- [Highlights](#highlights)
+- [Overview](#overview)
+  - [Authors](#authors)
+- [Usage](#usage)
+- [Installation](#installation)
+- [Feedback and Contributing](#feedback-and-contributing)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Highlights
+
+- Turn several JavaScript files into a TurboWarp extension. Made for larger projects that would need a multi-file structure.
+- Declare your extension's metadata, block signatures, and arguments in a single `twext.yml` manifest
+- Keep every block handler in its own ES module; `twext build` compiles them into one self-contained extension script
+- Static analysis catches problems before you even run the extension — missing exports, unknown block types and argument types, and references to names that won't exist at runtime
+- Zero config: `init` scaffolds a working project, `build` validates then compiles, `validate` checks blocks against your handlers
+
+## Overview
+
+TurboWarp extensions are written as a single JavaScript file: one script that registers a class with `getInfo()` block definitions and a method per opcode. Kept in one file, that gets hard to read once an extension has more than a few blocks.
+
+Twext takes the other path. You keep the block definitions and metadata in a YAML manifest, and each block's logic in its own ES module.
+
+Validation is not just schema checking. Twext parses each handler and the `setup` function and walks their free variables, so a handler that references an undeclared helper or a typo'd argument name is a build error, not a runtime mystery inside the extension.
+
+### Authors
+
+Twext is maintained by the [Twext Team](https://github.com/twext).
+
+## Usage
+
+Scaffold a new project:
+
+```bash
+twext init
+```
+
+This writes a minimal `twext.yml`, `src/index.js`, and a sample `src/blocks/hello.js`. From there, `build` validates and compiles:
+
+```bash
+twext build
+# writes dist/extension.js
+```
+
+Check a project without building:
+
+```bash
+twext validate
+```
+
+Point either command at a different manifest with `-c`; override the build output with `-o`.
+
+## Installation
+
+Install globally to use the `twext` command anywhere:
+
+```bash
+npm install -g @twext/twext
+```
+
+Or add it to a single project's dev dependencies:
+
+```bash
+npm install --save-dev @twext/twext
+```
+
+Requires Node.js 24 or newer.
+
+## Feedback and Contributing
+
+Bug reports and feature requests go in [issues](https://github.com/twext/twext/issues); questions and ideas for the project are welcome in [discussions](https://github.com/twext/twext/discussions).
+
+Contributions are welcome — open an issue first if the change is bigger than a typo fix.

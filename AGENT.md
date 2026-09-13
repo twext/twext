@@ -1,3 +1,25 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+- [AGENT.md](#agentmd)
+  - [Say the thing, not the importance of the thing](#say-the-thing-not-the-importance-of-the-thing)
+  - [Don't oversell notability or coverage](#dont-oversell-notability-or-coverage)
+  - [Avoid stock transition and hedge words](#avoid-stock-transition-and-hedge-words)
+  - [Skip the canned structure](#skip-the-canned-structure)
+  - [Prefer plain constructions over inflated ones](#prefer-plain-constructions-over-inflated-ones)
+  - [Don't manufacture false contrast](#dont-manufacture-false-contrast)
+  - [Formatting](#formatting)
+  - [Specificity over polish](#specificity-over-polish)
+  - [Attribution](#attribution)
+  - [Before submitting](#before-submitting)
+  - [Writing code that doesn't read as AI-generated](#writing-code-that-doesnt-read-as-ai-generated)
+    - [Comments](#comments)
+    - [Docstrings](#docstrings)
+    - [Naming and structure](#naming-and-structure)
+    - [Before submitting](#before-submitting-1)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # AGENT.md
 
 Guidelines for agents writing documentation in this repo. Goal: read like a developer wrote it after using the thing, not like it was generated to describe the thing. This section covers docs (READMEs, guides, changelogs, comments). Other sections may follow for code style, commits, etc.
