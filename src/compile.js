@@ -1,0 +1,194 @@
+import { parseFunctionSource } from "./function-source.js";
+
+export const BLOCK_TYPES = {
+  command: "Scratch.BlockType.COMMAND",
+  reporter: "Scratch.BlockType.REPORTER",
+  boolean: "Scratch.BlockType.BOOLEAN",
+  hat: "Scratch.BlockType.HAT",
+  event: "Scratch.BlockType.EVENT",
+  loop: "Scratch.BlockType.LOOP",
+  cond: "Scratch.BlockType.CONDITIONAL",
+  cblock: "Scratch.BlockType.CONDITIONAL",
+  button: "Scratch.BlockType.BUTTON",
+  label: "Scratch.BlockType.LABEL",
+};
+
+export const ARGUMENT_TYPES = {
+  string: "Scratch.ArgumentType.STRING",
+  text: "Scratch.ArgumentType.STRING",
+  number: "Scratch.ArgumentType.NUMBER",
+  boolean: "Scratch.ArgumentType.BOOLEAN",
+  angle: "Scratch.ArgumentType.ANGLE",
+  color: "Scratch.ArgumentType.COLOR",
+  matrix: "Scratch.ArgumentType.MATRIX",
+  note: "Scratch.ArgumentType.NOTE",
+};
+
+const INDENT = "  ";
+
+function validIdentifier(name) {
+  return /^[A-Za-z_$][\w$]*$/.test(name);
+}
+
+function methodName(name) {
+  return validIdentifier(name) ? name : JSON.stringify(name);
+}
+
+function renderScalar(value) {
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "string") {
+    if (/^Scratch\.(BlockType|ArgumentType)\.[A-Z_]+$/.test(value)) return value;
+    return JSON.stringify(value);
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(String(value));
+}
+
+function emitKey(key, value, level) {
+  const name = validIdentifier(key) ? key : JSON.stringify(key);
+  const pad = INDENT.repeat(level);
+  if (value === null || typeof value !== "object") {
+    return [`${pad}${name}: ${renderScalar(value)},`];
+  }
+  if (Array.isArray(value)) {
+    const lines = [`${pad}${name}: [`];
+    for (const item of value) {
+      if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+        lines.push(...emitObject(item, level + 1));
+      } else {
+        lines.push(`${pad}${INDENT}${renderScalar(item)},`);
+      }
+    }
+    lines.push(`${pad}],`);
+    return lines;
+  }
+  const lines = [`${pad}${name}: {`];
+  for (const [innerKey, innerValue] of Object.entries(value)) {
+    lines.push(...emitKey(innerKey, innerValue, level + 1));
+  }
+  lines.push(`${pad}},`);
+  return lines;
+}
+
+function emitFields(object, level) {
+  const lines = [];
+  for (const key of Object.keys(object)) {
+    lines.push(...emitKey(key, object[key], level));
+  }
+  return lines;
+}
+
+function emitObject(object, level) {
+  return [
+    INDENT.repeat(level) + "{",
+    ...emitFields(object, level + 1),
+    INDENT.repeat(level) + "},",
+  ];
+}
+
+export function resolveSetup(setup) {
+  if (setup === null || setup === undefined) return "";
+  if (typeof setup === "string") return setup;
+  if (typeof setup === "function") {
+    const parsed = parseFunctionSource(setup.toString());
+    return parsed ? parsed.body : "";
+  }
+  if (Array.isArray(setup)) return setup.map(resolveSetup).join("\n");
+  throw new TypeError('"setup" export must be a string, function, or array of strings');
+}
+
+function dedent(text) {
+  const lines = text.split("\n");
+  const indents = lines
+    .filter((line) => line.trim() !== "")
+    .map((line) => line.match(/^\s*/)[0].length);
+  const min = indents.length ? Math.min(...indents) : 0;
+  return lines.map((line) => line.slice(min)).join("\n");
+}
+
+function indentCode(text, level) {
+  const pad = INDENT.repeat(level);
+  return text
+    .split("\n")
+    .map((line) => pad + line)
+    .join("\n");
+}
+
+function pascalCase(text) {
+  return String(text).replace(/[^A-Za-z0-9]+(.)/g, (_, c) => c.toUpperCase());
+}
+
+function buildBlock(block) {
+  const type = block.blockType == null ? BLOCK_TYPES.reporter : BLOCK_TYPES[block.blockType];
+  if (!type) {
+    throw new Error(`Unknown blockType "${block.blockType}" for block "${block.opcode}"`);
+  }
+  const isLabel = type === BLOCK_TYPES.label;
+  const out = isLabel
+    ? { blockType: type, text: block.text ?? "" }
+    : { opcode: block.opcode, blockType: type, text: block.text ?? block.opcode };
+  if (block.arguments && typeof block.arguments === "object") {
+    const argumentNames = Object.keys(block.arguments);
+    if (argumentNames.length > 0) {
+      out.arguments = {};
+      for (const name of argumentNames) {
+        out.arguments[name] = buildArgument(block.arguments[name]);
+      }
+    }
+  }
+  return out;
+}
+
+function buildArgument(argument) {
+  const out = { type: ARGUMENT_TYPES[argument.type] ?? ARGUMENT_TYPES.string };
+  if (argument.defaultValue !== undefined) out.defaultValue = argument.defaultValue;
+  return out;
+}
+
+function renderMethod(opcode, handler) {
+  const parsed = parseFunctionSource(handler.toString());
+  if (!parsed) {
+    throw new Error(`Could not parse handler function for block "${opcode}"`);
+  }
+  const name = methodName(opcode);
+  const head = `    ${parsed.async ? "async " : ""}${name}(${parsed.params}) {`;
+  const body = dedent(parsed.body).trim();
+  if (!body) return `${head}\n    }`;
+  return `${head}\n${indentCode(body, 3)}\n    }`;
+}
+
+export function compileExtension(project, product) {
+  const { config, module: mod } = project;
+  const ext = config.extension ?? {};
+  const fallback = product?.defaults?.fallbackColor ?? "#0070F3";
+  const className = ext.className || pascalCase(ext.id || "Extension") + "Extension";
+
+  const info = {
+    id: ext.id,
+    name: ext.name ?? config.name ?? ext.id,
+    color1: ext.color1 ?? fallback,
+    ...(ext.color2 !== undefined && { color2: ext.color2 }),
+    ...(ext.color3 !== undefined && { color3: ext.color3 }),
+    blocks: config.blocks.map(buildBlock),
+  };
+
+  const setup = dedent(resolveSetup(mod.setup).trim());
+  const lines = ["(function (Scratch) {", '  "use strict";'];
+  if (setup) lines.push("", indentCode(setup, 1));
+  lines.push("", `  class ${className} {`, "    getInfo() {", "      return {");
+  lines.push(...emitFields(info, 4));
+  lines.push("      };", "    }");
+  const nonLabels = config.blocks.filter((block) => block.blockType !== "label");
+  const methods = nonLabels
+    .map((block) => renderMethod(block.opcode, mod.blocks[block.opcode]))
+    .join("\n\n");
+  lines.push(
+    "",
+    methods,
+    "  }",
+    "",
+    `  Scratch.extensions.register(new ${className}());`,
+    "})(Scratch);",
+  );
+  return lines.join("\n") + "\n";
+}
