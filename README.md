@@ -1,7 +1,7 @@
-<a href="https://github.com/nvm-sh/logos">
+<a href="https://github.com/twext/twext">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/whiteLogo.svg" />
-    <img src="./assets/regularLogo.svg" height="40" alt="nvm project logo" />
+    <img src="./assets/regularLogo.svg" height="40" alt="Twext project logo" />
   </picture>
 </a>
 

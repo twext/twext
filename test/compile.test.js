@@ -125,6 +125,128 @@ blocks:
   }
 });
 
+test("expression-bodied setup arrows do not early-return from the IIFE", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "twext-setup-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(
+      join(dir, "twext.yml"),
+      `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: setupDemo
+  name: "Setup Demo"
+blocks:
+  - opcode: ping
+    blockType: reporter
+    text: "ping"
+`,
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "src", "index.js"),
+      'export const blocks = { ping() { return "pong"; } };\nexport const setup = () => console.log("setup ran");\n',
+      "utf8",
+    );
+
+    const project = await loadProject(join(dir, "twext.yml"));
+    const code = compileExtension(project, loadProduct());
+    assert.doesNotMatch(code, /\n {2}return console\.log/);
+    const info = executeExtension(code).getInfo();
+    assert.equal(info.id, "setupDemo");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("dedent leaves whitespace inside template literals intact", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "twext-dedent-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(
+      join(dir, "twext.yml"),
+      `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: dedentDemo
+  name: "Dedent Demo"
+blocks:
+  - opcode: block
+    blockType: reporter
+    text: "block"
+`,
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "src", "index.js"),
+      "export const blocks = { block() { return `a\n    b\n  c`; } };\n",
+      "utf8",
+    );
+
+    const project = await loadProject(join(dir, "twext.yml"));
+    const code = compileExtension(project, loadProduct());
+    const extension = executeExtension(code);
+    assert.equal(extension.block({}), "a\n    b\n  c");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("validate rejects reserved opcodes, non-string text, and bad derived class names", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: "123"
+blocks:
+  - opcode: getInfo
+    blockType: reporter
+    text: 0
+  - opcode: constructor
+    blockType: reporter
+    text: "c"
+`,
+    "export const blocks = {}\n",
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('Opcode "getInfo"')));
+  assert.ok(result.errors.some((e) => e.includes('Opcode "constructor"')));
+  assert.ok(result.errors.some((e) => e.includes("text must be a string")));
+  assert.ok(result.errors.some((e) => e.includes("cannot be derived from the id")));
+});
+
+test("compile sanitizes class names derived from numeric-like ids", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "twext-classname-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(
+      join(dir, "twext.yml"),
+      `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: "123-tools"
+blocks:
+  - opcode: ping
+    blockType: reporter
+    text: "ping"
+`,
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "src", "index.js"),
+      'export const blocks = { ping() { return "pong"; } };\n',
+      "utf8",
+    );
+
+    const project = await loadProject(join(dir, "twext.yml"));
+    const code = compileExtension(project, loadProduct());
+    assert.match(code, /class _123ToolsExtension \{/);
+    assert.doesNotThrow(() => executeExtension(code));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 async function validateTempProject(yml, index) {
   const dir = mkdtempSync(join(tmpdir(), "twext-validate-"));
   try {

@@ -108,6 +108,7 @@
         }
       },
       "if": {
+        "required": ["blockType"],
         "properties": {
           "blockType": {
             "const": "label"

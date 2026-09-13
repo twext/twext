@@ -33,12 +33,14 @@ test("arrow with block body", () => {
 }`);
   assert.equal(parsed.async, false);
   assert.equal(parsed.params, "a, b");
+  assert.equal(parsed.expressionBody, false);
 });
 
 test("arrow with expression body", () => {
   const parsed = parseFunctionSource(`(a) => a * 2`);
   assert.equal(parsed.params, "a");
-  assert.equal(parsed.body.trim(), "return a * 2;");
+  assert.equal(parsed.expressionBody, true);
+  assert.equal(parsed.body, "a * 2");
 });
 
 test("async arrow", () => {

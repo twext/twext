@@ -33,5 +33,9 @@ blocks:
   - opcode: shout
     blockType: reporter
     text: "shout [THING]"
+    arguments:
+      THING:
+        type: string
+        defaultValue: "world"
   - blockType: label
     text: "Custom Utilities"

@@ -1,4 +1,4 @@
-import { BLOCK_TYPES, ARGUMENT_TYPES, resolveSetup } from "./compile.js";
+import { BLOCK_TYPES, ARGUMENT_TYPES, resolveSetup, pascalCase } from "./compile.js";
 import { loadProject } from "./project.js";
 import {
   RUNTIME_GLOBALS,
@@ -9,6 +9,55 @@ import {
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+const RESERVED_WORDS = new Set([
+  "await",
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "implements",
+  "import",
+  "in",
+  "instanceof",
+  "interface",
+  "let",
+  "new",
+  "null",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "return",
+  "static",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+]);
+const RESERVED_OPCODES = new Set(["constructor", "getInfo"]);
 
 export async function validateProject(configPath) {
   const errors = [];
@@ -26,12 +75,28 @@ export async function validateProject(configPath) {
     errors.push('twext.yml must define an "extension" section');
   } else {
     const ext = config.extension;
-    if (!ext.id) errors.push("extension.id is required");
-    if (!ext.name) warnings.push("extension.name is missing; falling back to the project name");
-    if (ext.className && !IDENTIFIER.test(ext.className)) {
-      errors.push(`extension.className "${ext.className}" is not a valid identifier`);
-    } else if (!ext.className) {
+    if (typeof ext.id !== "string" || !ext.id) {
+      errors.push("extension.id is required and must be a non-empty string");
+    }
+    if (!ext.name) {
+      warnings.push("extension.name is missing; falling back to the project name");
+    }
+    if (ext.className) {
+      if (
+        typeof ext.className !== "string" ||
+        !IDENTIFIER.test(ext.className) ||
+        RESERVED_WORDS.has(ext.className)
+      ) {
+        errors.push(`extension.className "${ext.className}" is not a valid identifier`);
+      }
+    } else {
       warnings.push("extension.className is missing; deriving it from the id");
+      const derived = pascalCase(ext.id || "Extension") + "Extension";
+      if (!IDENTIFIER.test(derived) || RESERVED_WORDS.has(derived)) {
+        errors.push(
+          "extension.className cannot be derived from the id; set it explicitly to a valid identifier",
+        );
+      }
     }
   }
 
@@ -53,6 +118,9 @@ export async function validateProject(configPath) {
         if (declared.has(block.opcode)) {
           errors.push(`Duplicate opcode "${block.opcode}" in blocks`);
         }
+        if (RESERVED_OPCODES.has(block.opcode)) {
+          errors.push(`Opcode "${block.opcode}" conflicts with a generated extension method`);
+        }
         declared.add(block.opcode);
         if (typeof mod.blocks[block.opcode] !== "function") {
           errors.push(
@@ -64,7 +132,7 @@ export async function validateProject(configPath) {
       if (block.blockType && !hasOwn(BLOCK_TYPES, block.blockType)) {
         errors.push(`Block "${name}" uses unknown blockType "${block.blockType}"`);
       }
-      if (block.text && typeof block.text !== "string") {
+      if (block.text !== undefined && typeof block.text !== "string") {
         errors.push(`Block "${name}" text must be a string`);
       }
       if (block.arguments !== undefined) {

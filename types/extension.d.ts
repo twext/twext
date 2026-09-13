@@ -5,7 +5,7 @@ export type HandlerArgs = Record<string, unknown>;
 export type Util = Record<string, unknown>;
 
 /** A block handler. Receives the block's argument values and the util object. */
-export type Handler = (args: HandlerArgs, util: Util) => unknown;
+export type Handler<A extends HandlerArgs = HandlerArgs> = (args: A, util: Util) => unknown;
 
 /** A map of opcode -> handler. Your entryPoint exports this as `blocks`. */
 export type Blocks = Record<string, Handler>;

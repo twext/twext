@@ -91,30 +91,118 @@ export function resolveSetup(setup) {
   if (typeof setup === "string") return setup;
   if (typeof setup === "function") {
     const parsed = parseFunctionSource(setup.toString());
-    return parsed ? parsed.body : "";
+    if (!parsed) return "";
+    return parsed.expressionBody ? `${parsed.body};` : parsed.body;
   }
   if (Array.isArray(setup)) return setup.map(resolveSetup).join("\n");
   throw new TypeError('"setup" export must be a string, function, or array of strings');
 }
 
+function markStringContentLines(text) {
+  const lines = text.split("\n");
+  const content = new Array(lines.length).fill(false);
+  let state = "code";
+  let prev = "code";
+  let quote = "";
+  let braceDepth = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (state === "template" || state === "comment") content[i] = true;
+    const line = lines[i];
+    let j = 0;
+    while (j < line.length) {
+      const c = line[j];
+      const next = line[j + 1];
+      if (state === "code" || state === "expr") {
+        if (c === "/" && next === "/") {
+          j = line.length;
+        } else if (c === "/" && next === "*") {
+          prev = state;
+          state = "comment";
+          j += 2;
+        } else if (c === '"' || c === "'") {
+          prev = state;
+          quote = c;
+          state = "string";
+          j += 1;
+        } else if (c === "`") {
+          prev = state;
+          state = "template";
+          j += 1;
+        } else if (state === "expr" && c === "{") {
+          braceDepth += 1;
+          j += 1;
+        } else if (state === "expr" && c === "}") {
+          braceDepth -= 1;
+          if (braceDepth === 0) state = "template";
+          j += 1;
+        } else {
+          j += 1;
+        }
+        continue;
+      }
+      if (state === "string") {
+        if (c === "\\") {
+          j += 2;
+        } else if (c === quote) {
+          state = prev;
+          j += 1;
+        } else {
+          j += 1;
+        }
+        continue;
+      }
+      if (state === "comment") {
+        if (c === "*" && next === "/") {
+          state = prev;
+          j += 2;
+        } else {
+          j += 1;
+        }
+        continue;
+      }
+      if (c === "\\") {
+        j += 2;
+      } else if (c === "`") {
+        state = prev;
+        j += 1;
+      } else if (c === "$" && next === "{") {
+        state = "expr";
+        braceDepth = 1;
+        j += 2;
+      } else {
+        j += 1;
+      }
+    }
+  }
+
+  return content;
+}
+
 function dedent(text) {
   const lines = text.split("\n");
-  const indents = lines
-    .filter((line) => line.trim() !== "")
-    .map((line) => line.match(/^\s*/)[0].length);
+  const content = markStringContentLines(text);
+  const indents = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (content[i]) continue;
+    const line = lines[i];
+    if (line.trim() === "") continue;
+    indents.push(line.match(/^\s*/)[0].length);
+  }
   const min = indents.length ? Math.min(...indents) : 0;
-  return lines.map((line) => line.slice(min)).join("\n");
+  return lines.map((line, i) => (content[i] ? line : line.slice(min))).join("\n");
 }
 
 function indentCode(text, level) {
   const pad = INDENT.repeat(level);
+  const content = markStringContentLines(text);
   return text
     .split("\n")
-    .map((line) => pad + line)
+    .map((line, i) => (content[i] ? line : pad + line))
     .join("\n");
 }
 
-function pascalCase(text) {
+export function pascalCase(text) {
   return String(text).replace(/[^A-Za-z0-9]+(.)/g, (_, c) => c.toUpperCase());
 }
 
@@ -152,7 +240,8 @@ function renderMethod(opcode, handler) {
   }
   const name = methodName(opcode);
   const head = `    ${parsed.async ? "async " : ""}${name}(${parsed.params}) {`;
-  const body = dedent(parsed.body).trim();
+  const source = parsed.expressionBody ? `return ${parsed.body};` : parsed.body;
+  const body = dedent(source).trim();
   if (!body) return `${head}\n    }`;
   return `${head}\n${indentCode(body, 3)}\n    }`;
 }
@@ -161,7 +250,9 @@ export function compileExtension(project, product) {
   const { config, module: mod } = project;
   const ext = config.extension ?? {};
   const fallback = product?.defaults?.fallbackColor ?? "#0070F3";
-  const className = ext.className || pascalCase(ext.id || "Extension") + "Extension";
+  const derived = pascalCase(ext.id || "Extension") + "Extension";
+  const rawClassName = ext.className || derived;
+  const className = validIdentifier(rawClassName) ? rawClassName : `_${rawClassName}`;
 
   const info = {
     id: ext.id,
