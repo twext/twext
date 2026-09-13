@@ -1,7 +1,14 @@
-import { BLOCK_TYPES, ARGUMENT_TYPES } from "./compile.js";
+import { BLOCK_TYPES, ARGUMENT_TYPES, resolveSetup } from "./compile.js";
 import { loadProject } from "./project.js";
+import {
+  RUNTIME_GLOBALS,
+  handlerFreeVariables,
+  programFreeVariables,
+  topLevelDeclarations,
+} from "./free-vars.js";
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
 export async function validateProject(configPath) {
   const errors = [];
@@ -33,6 +40,10 @@ export async function validateProject(configPath) {
   } else {
     const declared = new Set();
     for (const block of config.blocks) {
+      if (!block || typeof block !== "object" || Array.isArray(block)) {
+        errors.push("Each blocks entry must be a mapping");
+        continue;
+      }
       const isLabel = block.blockType === "label";
       if (!isLabel) {
         if (typeof block.opcode !== "string" || !block.opcode) {
@@ -50,22 +61,30 @@ export async function validateProject(configPath) {
         }
       }
       const name = block.opcode ?? block.text ?? "(unnamed block)";
-      if (block.blockType && !(block.blockType in BLOCK_TYPES)) {
+      if (block.blockType && !hasOwn(BLOCK_TYPES, block.blockType)) {
         errors.push(`Block "${name}" uses unknown blockType "${block.blockType}"`);
       }
       if (block.text && typeof block.text !== "string") {
         errors.push(`Block "${name}" text must be a string`);
       }
-      if (block.arguments && typeof block.arguments === "object") {
-        for (const [argumentName, argument] of Object.entries(block.arguments)) {
-          if (!argument || typeof argument !== "object") {
-            errors.push(`Block "${name}" argument "${argumentName}" must be a mapping`);
-            continue;
-          }
-          if (argument.type && !(argument.type in ARGUMENT_TYPES)) {
-            errors.push(
-              `Block "${name}" argument "${argumentName}" uses unknown type "${argument.type}"`,
-            );
+      if (block.arguments !== undefined) {
+        if (
+          block.arguments === null ||
+          typeof block.arguments !== "object" ||
+          Array.isArray(block.arguments)
+        ) {
+          errors.push(`Block "${name}" arguments must be a mapping`);
+        } else {
+          for (const [argumentName, argument] of Object.entries(block.arguments)) {
+            if (!argument || typeof argument !== "object" || Array.isArray(argument)) {
+              errors.push(`Block "${name}" argument "${argumentName}" must be a mapping`);
+              continue;
+            }
+            if (argument.type && !hasOwn(ARGUMENT_TYPES, argument.type)) {
+              errors.push(
+                `Block "${name}" argument "${argumentName}" uses unknown type "${argument.type}"`,
+              );
+            }
           }
         }
       }
@@ -75,7 +94,57 @@ export async function validateProject(configPath) {
         warnings.push(`Handler "${opcode}" is exported but not declared in twext.yml`);
       }
     }
+    validateReferences(errors, project);
   }
 
   return { ok: errors.length === 0, errors, warnings, project };
+}
+
+function validateReferences(errors, { config, module: mod }) {
+  let setupText = "";
+  try {
+    setupText = resolveSetup(mod.setup);
+  } catch (err) {
+    errors.push(`setup is not a string, function, or array: ${err.message}`);
+  }
+  const available = new Set(RUNTIME_GLOBALS);
+  if (setupText.trim()) {
+    try {
+      for (const name of topLevelDeclarations(setupText)) available.add(name);
+      const missing = [...programFreeVariables(setupText)].filter((name) => !available.has(name));
+      if (missing.length > 0) {
+        errors.push(
+          `setup references ${missing
+            .map((name) => `"${name}"`)
+            .join(", ")}, which is not defined in the compiled extension`,
+        );
+      }
+    } catch (err) {
+      errors.push(`setup could not be analyzed: ${err.message}`);
+    }
+  }
+
+  for (const block of config.blocks) {
+    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    const handler = mod.blocks[block.opcode];
+    if (block.blockType === "label" || typeof handler !== "function") continue;
+    let missing;
+    try {
+      missing = [...handlerFreeVariables(handler.toString())].filter(
+        (name) => !available.has(name),
+      );
+    } catch (err) {
+      errors.push(`Handler "${block.opcode}" could not be analyzed: ${err.message}`);
+      continue;
+    }
+    if (missing.length > 0) {
+      errors.push(
+        `Handler "${block.opcode}" references ${missing
+          .map((name) => `"${name}"`)
+          .join(
+            ", ",
+          )}, which is not defined in the compiled extension; put shared state in "setup" or inline it`,
+      );
+    }
+  }
 }

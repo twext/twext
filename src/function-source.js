@@ -2,7 +2,7 @@ export function parseFunctionSource(source) {
   const text = source.trim();
   let m;
 
-  m = /^(async\s+)?function\*?\s*[A-Za-z_$][\w$]*\s*\(([\s\S]*?)\)\s*\{([\s\S]*)\}$/.exec(text);
+  m = /^(async\s+)?function\s*[A-Za-z_$][\w$]*\s*\(([\s\S]*?)\)\s*\{([\s\S]*)\}$/.exec(text);
   if (m) return { async: Boolean(m[1]), params: m[2], body: m[3] };
 
   m = /^(async\s+)?function\s*\(([\s\S]*?)\)\s*\{([\s\S]*)\}$/.exec(text);

@@ -64,3 +64,12 @@ test("params with default object braces", () => {
 test("returns null for non-function source", () => {
   assert.equal(parseFunctionSource("const x = 1"), null);
 });
+
+test("rejects generator declarations", () => {
+  assert.equal(
+    parseFunctionSource(`function* gen() {
+  yield 1;
+}`),
+    null,
+  );
+});

@@ -125,6 +125,18 @@ blocks:
   }
 });
 
+async function validateTempProject(yml, index) {
+  const dir = mkdtempSync(join(tmpdir(), "twext-validate-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "twext.yml"), yml, "utf8");
+    writeFileSync(join(dir, "src", "index.js"), index, "utf8");
+    return await validateProject(join(dir, "twext.yml"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 test("validate accepts the basic fixture", async () => {
   const result = await validateProject(join(fixture("basic"), "twext.yml"));
   assert.equal(result.ok, true);
@@ -137,6 +149,76 @@ test("validate rejects missing handlers and unknown types", async () => {
   assert.ok(result.errors.some((e) => e.includes('Block "nope"')));
   assert.ok(result.errors.some((e) => e.includes('unknown blockType "imagetype"')));
   assert.ok(result.errors.some((e) => e.includes('unknown type "imaginary"')));
+});
+
+test("validate rejects handlers that reference undefined module-scope names", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: refDemo
+  name: "Ref Demo"
+blocks:
+  - opcode: hello
+    blockType: reporter
+    text: "hello"
+`,
+    `export const blocks = { hello() { return MISSING_HELPER(); } };\n`,
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('Handler "hello" references "MISSING_HELPER"')));
+});
+
+test("validate accepts handlers that reference setup names and globals", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: refOk
+  name: "Ref OK"
+blocks:
+  - opcode: hello
+    blockType: reporter
+    text: "hello"
+`,
+    `export const blocks = { hello() { return COMPUTED + Math.random(); } };
+export const setup = \`
+  const COMPUTED = 40;
+\`;
+`,
+  );
+  assert.equal(result.ok, true, result.errors.join("; "));
+});
+
+test("validate rejects non-mapping entries and arguments and inherited type names", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: shapeDemo
+  name: "Shape Demo"
+blocks:
+  - blockType: label
+    text: "group"
+  - null
+  - opcode: bad
+    blockType: reporter
+    text: "x"
+    arguments: []
+  - opcode: weird
+    blockType: constructor
+    text: "y"
+    arguments:
+      A:
+        type: toString
+`,
+    `export const blocks = { bad() { return 1; }, weird() { return 2; } };\n`,
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("Each blocks entry must be a mapping")));
+  assert.ok(result.errors.some((e) => e.includes('unknown blockType "constructor"')));
+  assert.ok(result.errors.some((e) => e.includes("arguments must be a mapping")));
+  assert.ok(result.errors.some((e) => e.includes('unknown type "toString"')));
 });
 
 test("compile throws on an unknown blockType", async () => {
