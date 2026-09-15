@@ -101,6 +101,10 @@ export function initCommand(product, target, force, log) {
     return false;
   }
   const root = resolve(dir);
+  if (isSymlink(root)) {
+    log.error(`${relative(process.cwd(), root)} is a symbolic link and was rejected`);
+    return false;
+  }
   for (const rel of Object.keys(FILES)) {
     const output = resolve(root, rel);
     const relToRoot = relative(root, output);
