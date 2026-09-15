@@ -5,6 +5,9 @@
   "author": "Twext Team",
   "license": "Apache-2.0",
   "type": "module",
+  "repository": {
+    "url": "git+https://github.com/twext/twext.git"
+  },
   "bin": {
     "twext": "src/cli.js"
   },
