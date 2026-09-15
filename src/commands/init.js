@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 function templateYml(fallbackColor) {
   return `name: "my-extension"
@@ -62,6 +62,14 @@ function parentDirs(dir, rel) {
   return out;
 }
 
+function isSymlink(p) {
+  try {
+    return lstatSync(p).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 export function initCommand(product, target, force, log) {
   const dir = resolve(target ?? ".");
   let existing = dir;
@@ -92,12 +100,32 @@ export function initCommand(product, target, force, log) {
     if (conflicts.length > 0) log.info(`Use -f to overwrite existing files.`);
     return false;
   }
+  const root = resolve(dir);
+  for (const rel of Object.keys(FILES)) {
+    const output = resolve(root, rel);
+    const relToRoot = relative(root, output);
+    if (relToRoot !== "" && (relToRoot === ".." || relToRoot.startsWith(`..${sep}`))) {
+      log.error(
+        `${relative(process.cwd(), output)} resolves outside ${relative(process.cwd(), root)}`,
+      );
+      return false;
+    }
+    let component = root;
+    for (const part of relToRoot.split(sep)) {
+      if (part === "") continue;
+      component = join(component, part);
+      if (isSymlink(component)) {
+        log.error(`${relative(process.cwd(), component)} is a symbolic link and was rejected`);
+        return false;
+      }
+    }
+  }
   mkdirSync(dir, { recursive: true });
   for (const [rel, render] of Object.entries(FILES)) {
-    const path = join(dir, rel);
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, render(product), "utf8");
-    log.bullet(relative(process.cwd(), path));
+    const output = resolve(root, rel);
+    mkdirSync(dirname(output), { recursive: true });
+    writeFileSync(output, render(product), "utf8");
+    log.bullet(relative(process.cwd(), output));
   }
   log.success(`Initialized ${dir}`);
   return true;
