@@ -34,8 +34,24 @@ export function clearCredentials() {
   rmSync(CONFIG_FILE, { force: true });
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+function validateHubUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new HubError(`Invalid hub URL: ${url}`);
+  }
+  if (parsed.protocol === "https:") return url;
+  if (parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname)) return url;
+  throw new HubError(
+    `Refusing to send credentials to ${url}; use an https:// hub or a loopback address.`,
+  );
+}
+
 export function resolveHubUrl(flag, env = process.env) {
-  return flag ?? env.TWEXTHUB_URL ?? loadCredentials().hub ?? DEFAULT_HUB_URL;
+  return validateHubUrl(flag ?? env.TWEXTHUB_URL ?? loadCredentials().hub ?? DEFAULT_HUB_URL);
 }
 
 export function resolveToken(flag, env = process.env) {

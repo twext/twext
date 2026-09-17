@@ -182,6 +182,20 @@ test("login reports rejected credentials without signing up", async () => {
   }
 });
 
+test("hub URLs must be HTTPS or loopback", async () => {
+  const { dir, cleanup } = tmpHome();
+  try {
+    const result = await runCli(
+      ["login", "--url", "http://example.com", "--namespace", "acme", "--password", "pw"],
+      { env: { HOME: dir } },
+    );
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /Refusing to send credentials/);
+  } finally {
+    cleanup();
+  }
+});
+
 test("login tightens permissions on an existing config file", async () => {
   const { dir, cleanup } = tmpHome();
   const cfgDir = join(dir, ".twext");
