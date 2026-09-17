@@ -35,6 +35,7 @@ export function clearCredentials() {
 }
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+const REQUEST_TIMEOUT_MS = 30_000;
 
 function validateHubUrl(url) {
   let parsed;
@@ -73,8 +74,14 @@ async function hubRequest(base, path, { method = "GET", token, body } = {}) {
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (err) {
+    if (err.name === "TimeoutError" || err.name === "AbortError") {
+      throw new HubError(
+        `The hub at ${base} did not respond within ${REQUEST_TIMEOUT_MS / 1000}s.`,
+      );
+    }
     throw new HubError(`Could not reach the hub at ${base}: ${err.message}`);
   }
   const text = await response.text();
