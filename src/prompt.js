@@ -16,7 +16,13 @@ export function ask(question, hidden = false) {
       stdin.resume();
       const onData = (chunk) => {
         for (const code of chunk) {
-          if (code === 3) process.exit(130);
+          if (code === 3) {
+            stdin.setRawMode(false);
+            stdin.pause();
+            stdin.removeListener("data", onData);
+            stdout.write("\n");
+            process.exit(130);
+          }
           if (code === 13 || code === 10) {
             stdin.setRawMode(false);
             stdin.pause();
