@@ -182,6 +182,34 @@ test("login reports rejected credentials without signing up", async () => {
   }
 });
 
+test("stored credentials are only used for the hub they were saved for", () => {
+  const { dir, cleanup } = tmpHome();
+  try {
+    const cfgDir = join(dir, ".twext");
+    mkdirSync(cfgDir, { recursive: true });
+    writeFileSync(
+      join(cfgDir, "config.json"),
+      JSON.stringify({ hub: "https://a.test/v0", namespace: "acme", token: "tok-a" }),
+    );
+    const hubModule = fileURLToPath(new URL("../src/hub.js", import.meta.url));
+    const script = `import { resolveToken, resolveNamespace } from ${JSON.stringify(hubModule)};
+      console.log([
+        resolveToken(undefined, "https://a.test/v0", {}),
+        resolveNamespace(undefined, "https://a.test/v0", {}),
+        resolveToken(undefined, "https://b.test/v0", {}),
+        resolveNamespace(undefined, "https://b.test/v0", {}),
+      ].join("|"));`;
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      env: { ...process.env, HOME: dir },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), "tok-a|acme||");
+  } finally {
+    cleanup();
+  }
+});
+
 test("hub URLs must be HTTPS or loopback", async () => {
   const { dir, cleanup } = tmpHome();
   try {

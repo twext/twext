@@ -40,8 +40,8 @@ export async function publishCommand(product, configPath, { url, token }, log) {
   const code = compileExtension(result.project, product);
 
   const hub = resolveHubUrl(url);
-  const namespace = resolveNamespace();
-  const authToken = resolveToken(token);
+  const namespace = resolveNamespace(undefined, hub);
+  const authToken = resolveToken(token, hub);
   const explicitToken = token ?? process.env.TWEXTHUB_TOKEN;
   if (!namespace) {
     log.error("Not logged in. Run twext login first.");

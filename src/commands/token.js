@@ -16,7 +16,7 @@ export async function tokenCommand(
   }
 
   const hub = resolveHubUrl(url);
-  const authToken = resolveToken(token);
+  const authToken = resolveToken(token, hub);
   if (!authToken) {
     log.error("Not logged in. Run twext login first.");
     return false;

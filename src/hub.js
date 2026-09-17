@@ -55,12 +55,17 @@ export function resolveHubUrl(flag, env = process.env) {
   return validateHubUrl(flag ?? env.TWEXTHUB_URL ?? loadCredentials().hub ?? DEFAULT_HUB_URL);
 }
 
-export function resolveToken(flag, env = process.env) {
-  return flag ?? env.TWEXTHUB_TOKEN ?? loadCredentials().token;
+function storedCredentialsFor(hub) {
+  const credentials = loadCredentials();
+  return credentials.hub === hub ? credentials : {};
 }
 
-export function resolveNamespace(flag, env = process.env) {
-  return flag ?? env.TWEXTHUB_NAMESPACE ?? loadCredentials().namespace;
+export function resolveToken(flag, hub, env = process.env) {
+  return flag ?? env.TWEXTHUB_TOKEN ?? storedCredentialsFor(hub).token;
+}
+
+export function resolveNamespace(flag, hub, env = process.env) {
+  return flag ?? env.TWEXTHUB_NAMESPACE ?? storedCredentialsFor(hub).namespace;
 }
 
 async function hubRequest(base, path, { method = "GET", token, body } = {}) {

@@ -9,8 +9,8 @@ export async function yankCommand(product, version, configPath, { url, token }, 
   }
 
   const hub = resolveHubUrl(url);
-  const namespace = resolveNamespace();
-  const authToken = resolveToken(token);
+  const namespace = resolveNamespace(undefined, hub);
+  const authToken = resolveToken(token, hub);
   if (!namespace) {
     log.error("Not logged in. Run twext login first.");
     return false;
