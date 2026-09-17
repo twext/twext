@@ -2,7 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -167,6 +176,36 @@ test("login reports rejected credentials without signing up", async () => {
       "never signs up implicitly",
     );
     assert.ok(!existsSync(join(dir, ".twext", "config.json")));
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("login tightens permissions on an existing config file", async () => {
+  const { dir, cleanup } = tmpHome();
+  const cfgDir = join(dir, ".twext");
+  const cfgFile = join(cfgDir, "config.json");
+  mkdirSync(cfgDir, { recursive: true });
+  writeFileSync(cfgFile, "{}\n");
+  chmodSync(cfgFile, 0o644);
+  const hub = await createHub([
+    {
+      method: "POST",
+      path: "/auth/login",
+      reply: {
+        status: 200,
+        body: { token: "sess-1", user: { namespace: "acme", role: "normal" } },
+      },
+    },
+  ]);
+  try {
+    const result = await runCli(
+      ["login", "--url", hub.url, "--namespace", "acme", "--password", "pw"],
+      { env: { HOME: dir } },
+    );
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(statSync(cfgFile).mode & 0o777, 0o600);
   } finally {
     cleanup();
     await hub.close();
