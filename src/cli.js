@@ -26,7 +26,7 @@ const OPTIONS = {
   token: { type: "string" },
   name: { type: "string" },
   scope: { type: "string", multiple: true },
-  expiresInDays: { type: "string" },
+  "expires-in-days": { type: "string" },
 };
 
 function helpText(product) {

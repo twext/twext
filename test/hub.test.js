@@ -400,6 +400,8 @@ test("token create sends scopes and prints the token once", async () => {
         "publish",
         "--scope",
         "yank",
+        "--expires-in-days",
+        "30",
         "--url",
         hub.url,
       ],
@@ -411,7 +413,7 @@ test("token create sends scopes and prints the token once", async () => {
     assert.match(result.stdout, /Created token "CI" with scope publish, yank/);
     assert.match(result.stdout, /at-456/);
     const request = hub.requests.find((r) => r.path === "/tokens");
-    assert.deepEqual(request.body, { name: "CI", scopes: ["publish", "yank"] });
+    assert.deepEqual(request.body, { name: "CI", scopes: ["publish", "yank"], expiresInDays: 30 });
   } finally {
     cleanup();
     await hub.close();

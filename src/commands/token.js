@@ -3,7 +3,7 @@ import { createAutomationToken, resolveHubUrl, resolveToken } from "../hub.js";
 export async function tokenCommand(
   product,
   subcommand,
-  { url, token, name, scope, expiresInDays },
+  { url, token, name, scope, "expires-in-days": expiresInDays },
   log,
 ) {
   if (subcommand !== "create") {
