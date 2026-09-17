@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -376,6 +376,24 @@ test("yank sends a DELETE for the published version", async () => {
   } finally {
     cleanup();
     await hub.close();
+  }
+});
+
+test("yank refuses an extension.id that is not a safe path segment", async () => {
+  const { dir, cleanup } = tmpHome();
+  const configPath = join(dir, "twext.yml");
+  writeFileSync(configPath, "extension:\n  id: foo/bar\n", "utf8");
+  try {
+    const result = await runCli(
+      ["yank", "1.0.0", "--config", configPath, "--url", "https://hub.test"],
+      {
+        env: { HOME: dir, TWEXTHUB_NAMESPACE: "acme", TWEXTHUB_TOKEN: "auto-tok" },
+      },
+    );
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /extension\.id "foo\/bar" is invalid/);
+  } finally {
+    cleanup();
   }
 });
 

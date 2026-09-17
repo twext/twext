@@ -8,6 +8,7 @@ import {
 } from "./free-vars.js";
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+export const EXTENSION_ID_PATTERN = /^[a-z0-9]{1,64}$/;
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const RESERVED_WORDS = new Set([
   "await",
@@ -77,7 +78,7 @@ export async function validateProject(configPath) {
     errors.push('twext.yml must define an "extension" section');
   } else {
     const ext = config.extension;
-    if (typeof ext.id !== "string" || !/^[a-z0-9]{1,64}$/.test(ext.id)) {
+    if (typeof ext.id !== "string" || !EXTENSION_ID_PATTERN.test(ext.id)) {
       errors.push("extension.id must be 1-64 lower-case letters or digits (a-z, 0-9)");
     }
     if (!ext.name) {
