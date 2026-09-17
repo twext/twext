@@ -495,6 +495,33 @@ test("signup fails on a malformed response without storing credentials", async (
   }
 });
 
+test("login and signup treat an empty successful body as an invalid response", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    { method: "POST", path: "/auth/login", reply: { status: 200 } },
+    { method: "POST", path: "/auth/signup", reply: { status: 201 } },
+  ]);
+  try {
+    const login = await runCli(
+      ["login", "--url", hub.url, "--namespace", "acme", "--password", "pw"],
+      { env: { HOME: dir } },
+    );
+    assert.equal(login.code, 1, login.stderr);
+    assert.match(login.stderr, /invalid login response/i);
+
+    const signup = await runCli(
+      ["signup", "--url", hub.url, "--namespace", "alice", "--password", "longpass"],
+      { env: { HOME: dir } },
+    );
+    assert.equal(signup.code, 1, signup.stderr);
+    assert.match(signup.stderr, /invalid signup response/i);
+    assert.ok(!existsSync(join(dir, ".twext", "config.json")));
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
 test("resolveHubUrl falls back to the public hub", () => {
   const { dir, cleanup } = tmpHome();
   try {

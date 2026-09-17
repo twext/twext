@@ -17,6 +17,7 @@ export async function signupCommand(
   try {
     const response = await signup(hub, namespace, password, displayName);
     if (
+      !response ||
       typeof response.token !== "string" ||
       response.token === "" ||
       !response.user ||

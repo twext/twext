@@ -30,6 +30,7 @@ export async function loginCommand(product, { url, namespace, password }, log) {
   }
 
   if (
+    !response ||
     typeof response.token !== "string" ||
     response.token === "" ||
     !response.user ||
