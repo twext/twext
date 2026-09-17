@@ -8,6 +8,7 @@ import {
 } from "./free-vars.js";
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+export const EXTENSION_ID_PATTERN = /^[a-z0-9]{1,64}$/;
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const RESERVED_WORDS = new Set([
   "await",
@@ -77,8 +78,8 @@ export async function validateProject(configPath) {
     errors.push('twext.yml must define an "extension" section');
   } else {
     const ext = config.extension;
-    if (typeof ext.id !== "string" || !ext.id.trim()) {
-      errors.push("extension.id is required and must be a non-empty string");
+    if (typeof ext.id !== "string" || !EXTENSION_ID_PATTERN.test(ext.id)) {
+      errors.push("extension.id must be 1-64 lower-case letters or digits (a-z, 0-9)");
     }
     if (!ext.name) {
       warnings.push("extension.name is missing; falling back to the project name");
@@ -93,7 +94,10 @@ export async function validateProject(configPath) {
       }
     } else {
       warnings.push("extension.className is missing; deriving it from the id");
-      const derived = pascalCase(ext.id || "Extension") + "Extension";
+      const derivedPascal = pascalCase(ext.id || "Extension");
+      const derived = /^[0-9]/.test(derivedPascal)
+        ? `_${derivedPascal}Extension`
+        : `${derivedPascal}Extension`;
       if (!IDENTIFIER.test(derived) || RESERVED_WORDS.has(derived)) {
         errors.push(
           "extension.className cannot be derived from the id; set it explicitly to a valid identifier",

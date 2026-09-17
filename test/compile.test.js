@@ -64,7 +64,7 @@ test("compiled extension runs and behaves like a real extension", async () => {
 
   const extension = executeExtension(code);
   const info = extension.getInfo();
-  assert.equal(info.id, "superUtilities");
+  assert.equal(info.id, "superutilities");
   assert.equal(info.name, "Super Utilities");
   assert.equal(info.color1, "#FF4D4D");
   assert.equal(info.blocks.length, 4);
@@ -193,7 +193,7 @@ blocks:
   }
 });
 
-test("validate rejects reserved opcodes, non-string text, and bad derived class names", async () => {
+test("validate rejects reserved opcodes and non-string text", async () => {
   const result = await validateTempProject(
     `entryPoint: "src/index.js"
 outputPath: "dist/extension.js"
@@ -213,7 +213,6 @@ blocks:
   assert.ok(result.errors.some((e) => e.includes('Opcode "getInfo"')));
   assert.ok(result.errors.some((e) => e.includes('Opcode "constructor"')));
   assert.ok(result.errors.some((e) => e.includes("text must be a string")));
-  assert.ok(result.errors.some((e) => e.includes("cannot be derived from the id")));
 });
 
 test("backslash-continued strings keep their whitespace through indentCode", async () => {
@@ -286,6 +285,22 @@ blocks:
   }
 });
 
+test("validate derives a valid class name for numeric-like ids", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: "123tools"
+blocks:
+  - opcode: ping
+    blockType: reporter
+    text: "ping"
+`,
+    'export const blocks = { ping() { return "pong"; } };\n',
+  );
+  assert.equal(result.ok, true, result.errors.join("; "));
+});
+
 async function validateTempProject(yml, index) {
   const dir = mkdtempSync(join(tmpdir(), "twext-validate-"));
   try {
@@ -335,7 +350,7 @@ test("validate accepts handlers that reference setup names and globals", async (
     `entryPoint: "src/index.js"
 outputPath: "dist/extension.js"
 extension:
-  id: refOk
+  id: refok
   name: "Ref OK"
 blocks:
   - opcode: hello

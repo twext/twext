@@ -8,7 +8,7 @@ entryPoint: "src/index.js"
 outputPath: "dist/extension.js"
 
 extension:
-  id: "superUtilities"
+  id: "superutilities"
   name: "Super Utilities"
   className: "SuperUtilitiesExtension"
   color1: "#FF4D4D"

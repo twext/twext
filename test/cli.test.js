@@ -121,7 +121,7 @@ test("unknown commands fail and --version prints the version", async () => {
     assert.equal(runCli(["frobnicate"], dir).status, 1);
     const version = runCli(["--version"], dir);
     assert.equal(version.status, 0);
-    assert.match(version.stdout, /^Twext 0\.1\.0/);
+    assert.match(version.stdout, /^Twext 0\.2\.0/);
   } finally {
     cleanup();
   }

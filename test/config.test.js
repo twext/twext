@@ -12,7 +12,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 test("loadProduct reads product.yml", () => {
   const product = loadProduct();
   assert.equal(product.name, "Twext");
-  assert.equal(product.version, "0.1.0");
+  assert.equal(product.version, "0.2.0");
   assert.equal(product.symbols.success, "✓");
   assert.equal(product.defaults.fallbackColor, "#0070F3");
 });
