@@ -2,7 +2,7 @@ entryPoint: "src/index.js"
 outputPath: "dist/extension.js"
 
 extension:
-  id: "brokenExtension"
+  id: "brokenextension"
   name: "Broken"
   className: "BrokenExtension"
   color1: "#111111"

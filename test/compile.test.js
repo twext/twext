@@ -64,7 +64,7 @@ test("compiled extension runs and behaves like a real extension", async () => {
 
   const extension = executeExtension(code);
   const info = extension.getInfo();
-  assert.equal(info.id, "superUtilities");
+  assert.equal(info.id, "superutilities");
   assert.equal(info.name, "Super Utilities");
   assert.equal(info.color1, "#FF4D4D");
   assert.equal(info.blocks.length, 4);
@@ -335,7 +335,7 @@ test("validate accepts handlers that reference setup names and globals", async (
     `entryPoint: "src/index.js"
 outputPath: "dist/extension.js"
 extension:
-  id: refOk
+  id: refok
   name: "Ref OK"
 blocks:
   - opcode: hello

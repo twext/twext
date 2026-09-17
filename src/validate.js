@@ -77,8 +77,8 @@ export async function validateProject(configPath) {
     errors.push('twext.yml must define an "extension" section');
   } else {
     const ext = config.extension;
-    if (typeof ext.id !== "string" || !ext.id.trim()) {
-      errors.push("extension.id is required and must be a non-empty string");
+    if (typeof ext.id !== "string" || !/^[a-z0-9]{1,64}$/.test(ext.id)) {
+      errors.push("extension.id must be 1-64 lower-case letters or digits (a-z, 0-9)");
     }
     if (!ext.name) {
       warnings.push("extension.name is missing; falling back to the project name");

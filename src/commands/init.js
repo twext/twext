@@ -12,7 +12,7 @@ entryPoint: "src/index.js"
 outputPath: "dist/extension.js"
 
 extension:
-  id: "myExtension"
+  id: "myextension"
   name: "My Extension"
   className: "MyExtension"
   color1: "${fallbackColor}"
