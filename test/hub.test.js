@@ -210,6 +210,68 @@ test("stored credentials are only used for the hub they were saved for", () => {
   }
 });
 
+test("hub URLs are canonicalized before they are stored or compared", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "POST",
+      path: "/auth/login",
+      reply: { status: 200, body: { token: "sess-1", user: { namespace: "acme", role: "user" } } },
+    },
+  ]);
+  try {
+    const login = await runCli(
+      ["login", "--url", `${hub.url}/`, "--namespace", "acme", "--password", "pw"],
+      { env: { HOME: dir } },
+    );
+    assert.equal(login.code, 0, login.stderr);
+    const config = JSON.parse(readFileSync(join(dir, ".twext", "config.json"), "utf8"));
+    assert.equal(config.hub, hub.url, "trailing slash is stripped before storing");
+    const hubModule = fileURLToPath(new URL("../src/hub.js", import.meta.url));
+    const script = `import { resolveHubUrl, resolveToken, resolveNamespace } from ${JSON.stringify(hubModule)};
+      console.log([
+        resolveHubUrl("${hub.url}/", {}),
+        resolveToken(undefined, "${hub.url}", {}),
+        resolveNamespace(undefined, "${hub.url}", {}),
+      ].join("|"));`;
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      env: { ...process.env, HOME: dir },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), `${hub.url}|sess-1|acme`);
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("stored hub URLs with trailing slashes still match canonical lookups", () => {
+  const { dir, cleanup } = tmpHome();
+  try {
+    const cfgDir = join(dir, ".twext");
+    mkdirSync(cfgDir, { recursive: true });
+    writeFileSync(
+      join(cfgDir, "config.json"),
+      JSON.stringify({ hub: "https://a.test/v0/", namespace: "acme", token: "tok-a" }),
+    );
+    const hubModule = fileURLToPath(new URL("../src/hub.js", import.meta.url));
+    const script = `import { resolveToken, resolveNamespace } from ${JSON.stringify(hubModule)};
+      console.log([
+        resolveToken(undefined, "https://a.test/v0", {}),
+        resolveNamespace(undefined, "https://a.test/v0", {}),
+      ].join("|"));`;
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      env: { ...process.env, HOME: dir },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), "tok-a|acme");
+  } finally {
+    cleanup();
+  }
+});
+
 test("hub URLs must be HTTPS or loopback", async () => {
   const { dir, cleanup } = tmpHome();
   try {
@@ -221,6 +283,46 @@ test("hub URLs must be HTTPS or loopback", async () => {
     assert.match(result.stderr, /Refusing to send credentials/);
   } finally {
     cleanup();
+  }
+});
+
+test("hub requests reject redirects so password bodies are never replayed", async () => {
+  const { dir, cleanup } = tmpHome();
+  let replayed = false;
+  const target = createServer((req, res) => {
+    replayed = true;
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end("{}");
+  });
+  let targetPort;
+  const source = createServer((req, res) => {
+    res.writeHead(302, { location: `http://127.0.0.1:${targetPort}/auth/login` });
+    res.end();
+  });
+  await new Promise((resolve) => target.listen(0, "127.0.0.1", resolve));
+  targetPort = target.address().port;
+  await new Promise((resolve) => source.listen(0, "127.0.0.1", resolve));
+  try {
+    const result = await runCli(
+      [
+        "login",
+        "--url",
+        `http://127.0.0.1:${source.address().port}`,
+        "--namespace",
+        "acme",
+        "--password",
+        "pw",
+      ],
+      { env: { HOME: dir } },
+    );
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /Could not reach the hub/);
+    assert.equal(replayed, false, "redirect target must never receive the request");
+    assert.ok(!existsSync(join(dir, ".twext", "config.json")));
+  } finally {
+    cleanup();
+    await new Promise((resolve) => target.close(resolve));
+    await new Promise((resolve) => source.close(resolve));
   }
 });
 
@@ -340,6 +442,52 @@ test("signup reports a taken namespace without storing credentials", async () =>
     );
     assert.equal(result.code, 1);
     assert.match(result.stderr, /already taken/);
+    assert.ok(!existsSync(join(dir, ".twext", "config.json")));
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("login fails on a malformed response without storing credentials", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "POST",
+      path: "/auth/login",
+      reply: { status: 200, body: { ok: true } },
+    },
+  ]);
+  try {
+    const result = await runCli(
+      ["login", "--url", hub.url, "--namespace", "acme", "--password", "pw"],
+      { env: { HOME: dir } },
+    );
+    assert.equal(result.code, 1, result.stderr);
+    assert.match(result.stderr, /invalid login response/i);
+    assert.ok(!existsSync(join(dir, ".twext", "config.json")));
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("signup fails on a malformed response without storing credentials", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "POST",
+      path: "/auth/signup",
+      reply: { status: 201, body: { token: "sess-4" } },
+    },
+  ]);
+  try {
+    const result = await runCli(
+      ["signup", "--url", hub.url, "--namespace", "alice", "--password", "longpass"],
+      { env: { HOME: dir } },
+    );
+    assert.equal(result.code, 1, result.stderr);
+    assert.match(result.stderr, /invalid signup response/i);
     assert.ok(!existsSync(join(dir, ".twext", "config.json")));
   } finally {
     cleanup();

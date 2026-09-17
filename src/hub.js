@@ -37,6 +37,10 @@ export function clearCredentials() {
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const REQUEST_TIMEOUT_MS = 30_000;
 
+function canonicalHubUrl(url) {
+  return typeof url === "string" ? url.replace(/\/+$/, "") : url;
+}
+
 function validateHubUrl(url) {
   let parsed;
   try {
@@ -44,8 +48,9 @@ function validateHubUrl(url) {
   } catch {
     throw new HubError(`Invalid hub URL: ${url}`);
   }
-  if (parsed.protocol === "https:") return url;
-  if (parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname)) return url;
+  if (parsed.protocol === "https:") return canonicalHubUrl(url);
+  if (parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname))
+    return canonicalHubUrl(url);
   throw new HubError(
     `Refusing to send credentials to ${url}; use an https:// hub or a loopback address.`,
   );
@@ -57,7 +62,10 @@ export function resolveHubUrl(flag, env = process.env) {
 
 function storedCredentialsFor(hub) {
   const credentials = loadCredentials();
-  return credentials.hub === hub ? credentials : {};
+  return typeof credentials.hub === "string" &&
+    canonicalHubUrl(credentials.hub) === canonicalHubUrl(hub)
+    ? credentials
+    : {};
 }
 
 export function resolveToken(flag, hub, env = process.env) {
@@ -79,6 +87,7 @@ async function hubRequest(base, path, { method = "GET", token, body } = {}) {
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      redirect: "error",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (err) {

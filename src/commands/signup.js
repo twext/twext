@@ -16,6 +16,14 @@ export async function signupCommand(
 
   try {
     const response = await signup(hub, namespace, password, displayName);
+    if (
+      typeof response.token !== "string" ||
+      response.token === "" ||
+      !response.user ||
+      typeof response.user.role !== "string"
+    ) {
+      throw new Error("The hub returned an invalid signup response.");
+    }
     saveCredentials({ hub, namespace, token: response.token });
     log.success(`Signed up as ${namespace}`);
     if (response.user.role === "admin") {

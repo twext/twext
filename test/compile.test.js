@@ -193,7 +193,7 @@ blocks:
   }
 });
 
-test("validate rejects reserved opcodes, non-string text, and bad derived class names", async () => {
+test("validate rejects reserved opcodes and non-string text", async () => {
   const result = await validateTempProject(
     `entryPoint: "src/index.js"
 outputPath: "dist/extension.js"
@@ -213,7 +213,6 @@ blocks:
   assert.ok(result.errors.some((e) => e.includes('Opcode "getInfo"')));
   assert.ok(result.errors.some((e) => e.includes('Opcode "constructor"')));
   assert.ok(result.errors.some((e) => e.includes("text must be a string")));
-  assert.ok(result.errors.some((e) => e.includes("cannot be derived from the id")));
 });
 
 test("backslash-continued strings keep their whitespace through indentCode", async () => {
@@ -284,6 +283,22 @@ blocks:
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("validate derives a valid class name for numeric-like ids", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: "123tools"
+blocks:
+  - opcode: ping
+    blockType: reporter
+    text: "ping"
+`,
+    'export const blocks = { ping() { return "pong"; } };\n',
+  );
+  assert.equal(result.ok, true, result.errors.join("; "));
 });
 
 async function validateTempProject(yml, index) {
