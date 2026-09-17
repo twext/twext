@@ -12,26 +12,27 @@ export function ask(question, hidden = false) {
     if (hidden) {
       let value = "";
       stdout.write(question);
+      stdin.setEncoding("utf8");
       stdin.setRawMode(true);
       stdin.resume();
       const onData = (chunk) => {
-        for (const code of chunk) {
-          if (code === 3) {
+        for (const char of chunk) {
+          if (char === "\u0003") {
             stdin.setRawMode(false);
             stdin.pause();
             stdin.removeListener("data", onData);
             stdout.write("\n");
             process.exit(130);
           }
-          if (code === 13 || code === 10) {
+          if (char === "\r" || char === "\n") {
             stdin.setRawMode(false);
             stdin.pause();
             stdin.removeListener("data", onData);
             stdout.write("\n");
             return resolve(value);
           }
-          if (code === 127 || code === 8) value = value.slice(0, -1);
-          else value += String.fromCharCode(code);
+          if (char === "\u007f" || char === "\b") value = value.slice(0, -1);
+          else value += char;
         }
       };
       stdin.on("data", onData);
