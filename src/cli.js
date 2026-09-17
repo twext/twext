@@ -38,7 +38,7 @@ Commands:
   build        Validate and compile the extension (default)
   validate     Check blocks against the entryPoint handlers
   init         Scaffold a new project in a directory
-  login        Sign in to a TwextHub hub (signs up when the namespace is new)
+  login        Sign in to a TwextHub hub
   signup       Create a new account on a TwextHub hub
   logout       Forget the stored hub credentials
   publish      Validate, build, and publish to the hub

@@ -74,7 +74,7 @@ twext publish
 twext yank 1.0.0
 ```
 
-`signup` creates a new account. `login` signs in with your `@namespace` and password, creating the account when the namespace does not exist yet. Credentials live in `~/.twext/config.json` (mode `0600`) with `TWEXTHUB_URL`, `TWEXTHUB_TOKEN`, and `TWEXTHUB_NAMESPACE` as environment overrides for automation. The default hub is `https://twexts.sdisk.us/api/v0`; pass `-u` to point at another one.
+`signup` creates a new account. `login` signs in with your `@namespace` and password. Credentials live in `~/.twext/config.json` (mode `0600`) with `TWEXTHUB_URL`, `TWEXTHUB_TOKEN`, and `TWEXTHUB_NAMESPACE` as environment overrides for automation. The default hub is `https://twexts.sdisk.us/api/v0`; pass `-u` to point at another one.
 
 `publish` validates and builds, then uploads the manifest and compiled code. When the hub has Terms of Service that have not been accepted yet, `publish` accepts them automatically only when using a stored session token — mapping this command into CI with an automation token is deliberately left to you, so the terms gate can't be silently clicked through. `yank` removes a version. `logout` discards the stored credentials.
 

@@ -144,7 +144,7 @@ test("login stores credentials and publish auto-accepts terms with a session tok
   }
 });
 
-test("login signs up when credentials are rejected", async () => {
+test("login reports rejected credentials without signing up", async () => {
   const { dir, cleanup } = tmpHome();
   const hub = await createHub([
     {
@@ -152,22 +152,21 @@ test("login signs up when credentials are rejected", async () => {
       path: "/auth/login",
       reply: { status: 401, body: { detail: "Invalid namespace or password" } },
     },
-    {
-      method: "POST",
-      path: "/auth/signup",
-      reply: {
-        status: 200,
-        body: { token: "sess-2", user: { namespace: "newbie", role: "user" } },
-      },
-    },
   ]);
   try {
     const result = await runCli(
       ["login", "--url", hub.url, "--namespace", "newbie", "--password", "pw"],
       { env: { HOME: dir } },
     );
-    assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /Signed up as newbie/);
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /Invalid namespace or password/);
+    assert.match(result.stdout, /Run twext signup/);
+    assert.equal(
+      hub.requests.filter((r) => r.path === "/auth/signup").length,
+      0,
+      "never signs up implicitly",
+    );
+    assert.ok(!existsSync(join(dir, ".twext", "config.json")));
   } finally {
     cleanup();
     await hub.close();
