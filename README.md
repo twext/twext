@@ -31,6 +31,7 @@
 - Keep every block handler in its own ES module; `twext build` compiles them into one self-contained extension script
 - Static analysis catches problems before you even run the extension — missing exports, unknown block types and argument types, and references to names that won't exist at runtime
 - Zero config: `init` scaffolds a working project, `build` validates then compiles, `validate` checks blocks against your handlers
+- Follow review decisions from TwextHub with `twext notifications`; `publish` and `yank` print an unread count if the hub has news for you
 
 ## Overview
 
@@ -84,6 +85,17 @@ For CI, create a scoped token once:
 twext token create --name ci --scope publish --scope yank
 TWEXTHUB_TOKEN=twext_... twext publish
 ```
+
+Review decisions on a `pending` publish land in the hub's notification mailbox. Check it with:
+
+```bash
+twext notifications              # unread only
+twext notifications --all        # everything, read included
+twext notifications --read       # mark the listed ones read
+twext notifications --wait       # poll until this project's pending version is approved or rejected
+```
+
+`--wait` matches decisions against the local `twext.yml` (`extension.id` and `version`), exits `0` on approval, `1` on rejection, and `2` when `--wait-timeout` seconds (default 900) elapse without a decision. `publish` and `yank` print a one-line unread count when the hub has notifications for you; the line is suppressed for automation tokens and never fails the command.
 
 Point either command at a different manifest with `-c`; override the build output with `-o`.
 

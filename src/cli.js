@@ -12,6 +12,7 @@ import { logoutCommand } from "./commands/logout.js";
 import { publishCommand } from "./commands/publish.js";
 import { yankCommand } from "./commands/yank.js";
 import { tokenCommand } from "./commands/token.js";
+import { notificationsCommand } from "./commands/notifications.js";
 
 const OPTIONS = {
   help: { type: "boolean", short: "h" },
@@ -28,6 +29,11 @@ const OPTIONS = {
   scope: { type: "string", multiple: true },
   "expires-in-days": { type: "string" },
   visibility: { type: "string" },
+  all: { type: "boolean" },
+  json: { type: "boolean" },
+  read: { type: "boolean" },
+  wait: { type: "boolean" },
+  "wait-timeout": { type: "string" },
 };
 
 function helpText(product) {
@@ -45,6 +51,7 @@ Commands:
   publish      Validate, build, and publish to the hub
   yank         Remove a published version from the hub (e.g. twext yank 1.0.0)
   token        Create an automation token for CI (e.g. twext token create)
+  notifications  Show hub notifications (e.g. review decisions)
   help         Show this help
 
 Options:
@@ -59,7 +66,12 @@ Options:
   --name <name>            Token name (token create only)
   --scope <scope>          Token scope, repeatable (token create only; default: publish)
   --expires-in-days <days> Token lifetime (token create only)
-  --visibility <level>    Registry visibility on publish (public, unlisted, private; default: public)
+  --visibility <level>      Registry visibility on publish (public, unlisted, private; default: public)
+  --all                     Include read notifications (notifications only)
+  --json                    Print raw API JSON (notifications only)
+  --read                    Mark the listed notifications read (notifications only)
+  --wait                    Poll until the pending version has a review decision (notifications only)
+  --wait-timeout <seconds>  --wait timeout (notifications only; default 900)
   -h, --help               Show this help
   -v, --version            Print the version`;
 }
@@ -104,6 +116,11 @@ async function main(args) {
       return (await yankCommand(product, positionals[1], configPath, values, log)) ? 0 : 1;
     case "token":
       return (await tokenCommand(product, positionals[1], values, log)) ? 0 : 1;
+    case "notifications": {
+      // Returns 0 (listed/approved), 1 (rejected or error), 2 (--wait timeout).
+      const code = await notificationsCommand(product, configPath, values, log);
+      return typeof code === "number" ? code : code ? 0 : 1;
+    }
     default:
       log.error(`Unknown command "${command}"`);
       console.log(helpText(product));

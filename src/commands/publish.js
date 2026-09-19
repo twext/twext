@@ -1,6 +1,7 @@
 import { stringify as stringifyYaml } from "yaml";
 import { validateProject } from "../validate.js";
 import { collectSources } from "../sources.js";
+import { warnUnread } from "./notifications.js";
 import {
   HubError,
   acceptTerms,
@@ -54,6 +55,8 @@ export async function publishCommand(
     log.error("No token. Run twext login, or pass --token / set TWEXTHUB_TOKEN.");
     return false;
   }
+
+await warnUnread(product, { url, token }, log);
 
   log.progress(
     `Publishing ${id}@${version} (${fileCount} source file${fileCount === 1 ? "" : "s"}) to @${namespace}...`,

@@ -153,3 +153,11 @@ export async function yankVersion(base, token, namespace, id, version) {
 export async function createAutomationToken(base, token, body) {
   return hubRequest(base, "/tokens", { method: "POST", token, body });
 }
+
+export async function listNotifications(base, token, query = "") {
+  return hubRequest(base, `/notifications${query}`, { token });
+}
+
+export async function markNotificationsRead(base, token, body) {
+  return hubRequest(base, "/notifications/read", { method: "POST", token, body });
+}
