@@ -402,3 +402,216 @@ test("compile throws on an unknown blockType", async () => {
   const project = await loadProject(join(fixture("broken"), "twext.yml"));
   assert.throws(() => compileExtension(project, product), /Unknown blockType "imagetype"/);
 });
+
+test("compiles menus, separators, and labels into getInfo", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "twext-menus-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(
+      join(dir, "twext.yml"),
+      `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: menudemo
+  name: "Menu Demo"
+  menus:
+    FORMAT:
+      acceptReporters: true
+      items: ["uppercase", "lowercase"]
+    SHORTHAND: ["a", "b"]
+    OBJECTS:
+      acceptReporters: true
+      items:
+        - text: "Display Uppercase"
+          value: "UPPER"
+blocks:
+  - blockType: label
+    text: "Formatting"
+  - "---"
+  - opcode: convert
+    blockType: reporter
+    text: "convert [TEXT] to [FORMAT]"
+    arguments:
+      TEXT:
+        type: string
+        defaultValue: "Apple"
+      FORMAT:
+        type: string
+        menu: FORMAT
+  - opcode: pick
+    blockType: reporter
+    text: "pick from [OBJECT]"
+    arguments:
+      OBJECT:
+        type: string
+        menu: OBJECTS
+        defaultValue: "UPPER"
+`,
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "src", "index.js"),
+      "export const blocks = { convert({ FORMAT }) { return FORMAT; }, pick({ OBJECT }) { return OBJECT; } };\n",
+      "utf8",
+    );
+
+    const project = await loadProject(join(dir, "twext.yml"));
+    const result = await validateProject(join(dir, "twext.yml"));
+    assert.equal(result.ok, true, result.errors.join("; "));
+    const code = compileExtension(project, loadProduct());
+    assert.match(code, /"---",/);
+    assert.doesNotMatch(code, /undefined/);
+
+    const info = executeExtension(code).getInfo();
+    assert.equal(info.blocks[0].blockType, "label");
+    assert.equal(info.blocks[0].text, "Formatting");
+    assert.equal(info.blocks[1], "---");
+    assert.equal(info.blocks[2].arguments.FORMAT.menu, "FORMAT");
+    assert.equal(info.menus.FORMAT.acceptReporters, true);
+    assert.deepEqual(info.menus.FORMAT.items, ["uppercase", "lowercase"]);
+    assert.deepEqual(info.menus.SHORTHAND, { items: ["a", "b"] });
+    assert.equal(info.menus.OBJECTS.acceptReporters, true);
+    assert.deepEqual(info.menus.OBJECTS.items, [{ text: "Display Uppercase", value: "UPPER" }]);
+    assert.equal(executeExtension(code).convert({ FORMAT: "uppercase" }), "uppercase");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("validate accepts menus and separators", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: menuok
+  menus:
+    LEVEL:
+      acceptReporters: true
+      items: ["info", "warn"]
+    MODE: ["a", "b"]
+blocks:
+  - "---"
+  - blockType: label
+    text: "Heading"
+  - opcode: log
+    blockType: command
+    text: "log [LEVEL]"
+    arguments:
+      LEVEL:
+        type: string
+        menu: LEVEL
+`,
+    "export const blocks = { log() {} };\n",
+  );
+  assert.equal(result.ok, true, result.errors.join("; "));
+});
+
+test("validate rejects unknown menus and non-separator strings", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: menuErr
+  menus:
+    KNOWN: ["x"]
+blocks:
+  - "---"
+  - "Not a separator"
+  - opcode: one
+    blockType: reporter
+    text: "one"
+    arguments:
+      A:
+        type: string
+        menu: MISSING
+`,
+    "export const blocks = { one() { return 1; } };\n",
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('Blocks entry "Not a separator"')));
+  assert.ok(result.errors.some((e) => e.includes('references unknown menu "MISSING"')));
+});
+
+test("validate rejects malformed menus", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: menuBad
+  menus:
+    A:
+      items: "not-an-array"
+    B:
+      acceptReporters: "yes"
+blocks:
+  - opcode: one
+    blockType: reporter
+    text: "one"
+`,
+    "export const blocks = { one() { return 1; } };\n",
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('Menu "A" items must be an array')));
+  assert.ok(result.errors.some((e) => e.includes('Menu "B" acceptReporters must be a boolean')));
+});
+
+test("validate rejects menus without items and items missing text or value", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: menuFields
+  menus:
+    NOITEMS:
+      acceptReporters: true
+    NOTEXT:
+      items:
+        - value: "x"
+    NOVALUE:
+      items:
+        - text: "x"
+blocks:
+  - opcode: one
+    blockType: reporter
+    text: "one"
+`,
+    "export const blocks = { one() { return 1; } };\n",
+  );
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((e) =>
+      e.includes('Menu "NOITEMS" must define items or be a plain list of items'),
+    ),
+  );
+  assert.ok(
+    result.errors.some((e) => e.includes('Menu "NOTEXT" item text and value must be strings')),
+  );
+  assert.ok(
+    result.errors.some((e) => e.includes('Menu "NOVALUE" item text and value must be strings')),
+  );
+});
+
+test("validate accepts object menu items with both text and value", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: menugood
+  menus:
+    CHOICES:
+      items:
+        - text: "One"
+          value: "1"
+blocks:
+  - opcode: one
+    blockType: reporter
+    text: "one"
+    arguments:
+      C:
+        type: string
+        menu: CHOICES
+`,
+    "export const blocks = { one() { return 1; } };\n",
+  );
+  assert.equal(result.ok, true, result.errors.join("; "));
+});
