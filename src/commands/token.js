@@ -1,27 +1,38 @@
-import { createAutomationToken, resolveHubUrl, resolveToken } from "../hub.js";
+import {
+  createAutomationToken,
+  deleteAutomationToken,
+  listAutomationTokens,
+  resolveHubUrl,
+  resolveToken,
+} from "../hub.js";
 
-export async function tokenCommand(
-  product,
-  subcommand,
-  { url, token, name, scope, "expires-in-days": expiresInDays },
-  log,
-) {
-  if (subcommand !== "create") {
-    log.error(
-      subcommand
-        ? `Unknown token subcommand "${subcommand}"`
-        : "Usage: twext token create [--name NAME] [--scope publish [--scope yank]]",
-    );
-    return false;
-  }
+function formatWhen(iso) {
+  if (!iso) return "never";
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms)) return iso;
+  if (ms < 60_000) return "just now";
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
-  const hub = resolveHubUrl(url);
+async function requireSession(hub, token, log) {
   const authToken = resolveToken(token, hub);
   if (!authToken) {
     log.error("Not logged in. Run twext login first.");
-    return false;
+    return null;
   }
+  return authToken;
+}
 
+async function createCommand(
+  hub,
+  authToken,
+  { name, scope, "expires-in-days": expiresInDays },
+  log,
+) {
   const scopes = (scope ?? [])
     .flatMap((entry) => entry.split(","))
     .map((entry) => entry.trim())
@@ -62,4 +73,70 @@ export async function tokenCommand(
   log.info("The token is shown once; keep it out of the repository.");
   log.bullet(created.token);
   return true;
+}
+
+async function listCommand(hub, authToken, { json }, log) {
+  let page;
+  try {
+    page = await listAutomationTokens(hub, authToken);
+  } catch (err) {
+    log.error(err.message);
+    return false;
+  }
+  if (json) {
+    console.log(JSON.stringify(page, null, 2));
+    return true;
+  }
+  if (page.data.length === 0) {
+    console.log("No automation tokens.");
+    return true;
+  }
+  for (const row of page.data) {
+    console.log(
+      ` ${row.id.padEnd(4)} ${row.name.padEnd(16)} scopes ${row.scopes.join(",")} · created ${formatWhen(row.createdAt)} · last used ${formatWhen(row.lastUsedAt)}`,
+    );
+  }
+  return true;
+}
+
+async function revokeCommand(hub, authToken, target, { json }, log) {
+  if (!target) {
+    log.error("Usage: twext token revoke <id>");
+    return false;
+  }
+  if (!/^\d+$/.test(target)) {
+    log.error("Token id must be a number.");
+    return false;
+  }
+  try {
+    await deleteAutomationToken(hub, authToken, target);
+  } catch (err) {
+    log.error(err.message);
+    return false;
+  }
+  if (json) {
+    console.log(JSON.stringify({ revoked: target }, null, 2));
+    return true;
+  }
+  log.success(`Revoked token ${target}`);
+  return true;
+}
+
+export async function tokenCommand(product, subcommand, target, values, log) {
+  if (subcommand !== "create" && subcommand !== "list" && subcommand !== "revoke") {
+    log.error(
+      subcommand
+        ? `Unknown token subcommand "${subcommand}"`
+        : "Usage: twext token <create|list|revoke> [id]",
+    );
+    return false;
+  }
+
+  const hub = resolveHubUrl(values.url);
+  const authToken = await requireSession(hub, values.token, log);
+  if (!authToken) return false;
+
+  if (subcommand === "create") return createCommand(hub, authToken, values, log);
+  if (subcommand === "list") return listCommand(hub, authToken, values, log);
+  return revokeCommand(hub, authToken, target, values, log);
 }

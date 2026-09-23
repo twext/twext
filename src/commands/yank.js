@@ -1,6 +1,7 @@
 import { readProjectConfig } from "../project.js";
 import { EXTENSION_ID_PATTERN } from "../validate.js";
 import { resolveHubUrl, resolveNamespace, resolveToken, yankVersion } from "../hub.js";
+import { warnUnread } from "./notifications.js";
 
 export async function yankCommand(
   product,
@@ -25,6 +26,8 @@ export async function yankCommand(
     log.error("No token. Run twext login, or pass --token / set TWEXTHUB_TOKEN.");
     return false;
   }
+
+  await warnUnread(product, { url, token }, log);
 
   let id;
   try {

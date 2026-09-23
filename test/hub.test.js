@@ -700,3 +700,393 @@ test("token create sends scopes and prints the token once", async () => {
     await hub.close();
   }
 });
+
+test("whoami prints the signed-in account and honors --json", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "GET",
+      path: "/auth/me",
+      reply: {
+        status: 200,
+        body: {
+          namespace: "acme",
+          displayName: "Acme Co",
+          role: "admin",
+          hasPublished: true,
+          createdAt: "2025-01-02T00:00:00.000Z",
+        },
+      },
+    },
+  ]);
+  try {
+    const text = await runCli(["whoami", "--url", hub.url], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(text.code, 0, text.stderr);
+    assert.match(text.stdout, /@acme \(Acme Co\)/);
+    assert.match(text.stdout, /admin/);
+
+    const json = await runCli(["whoami", "--url", hub.url, "--json"], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(JSON.parse(json.stdout).namespace, "acme");
+
+    const denied = await runCli(["whoami", "--url", hub.url], { env: { HOME: dir } });
+    assert.equal(denied.code, 1);
+    assert.match(denied.stderr, /Not logged in/);
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("logout revokes the session on the hub before forgetting credentials", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "POST",
+      path: "/auth/logout",
+      reply: { status: 204, body: null },
+    },
+  ]);
+  try {
+    mkdirSync(join(dir, ".twext"), { recursive: true });
+    writeFileSync(
+      join(dir, ".twext", "config.json"),
+      JSON.stringify({ hub: hub.url, namespace: "acme", token: "sess-1" }),
+      { mode: 0o600 },
+    );
+    const logout = await runCli(["logout"], { env: { HOME: dir } });
+    assert.equal(logout.code, 0, logout.stderr);
+    assert.match(logout.stdout, /revoked the session/);
+    assert.ok(!existsSync(join(dir, ".twext", "config.json")));
+    const revoke = hub.requests.find((r) => r.path === "/auth/logout");
+    assert.ok(revoke, "logout endpoint hit");
+    assert.equal(revoke.authorization, "Bearer sess-1");
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("logout still succeeds when the hub cannot be reached", async () => {
+  const { dir, cleanup } = tmpHome();
+  mkdirSync(join(dir, ".twext"), { recursive: true });
+  writeFileSync(
+    join(dir, ".twext", "config.json"),
+    JSON.stringify({ hub: "https://hub.missing.test", namespace: "acme", token: "sess-1" }),
+    { mode: 0o600 },
+  );
+  try {
+    const logout = await runCli(["logout"], { env: { HOME: dir } });
+    assert.equal(logout.code, 0, logout.stderr);
+    assert.ok(!existsSync(join(dir, ".twext", "config.json")));
+  } finally {
+    cleanup();
+  }
+});
+
+test("token list and revoke manage automation tokens", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "GET",
+      path: "/tokens",
+      reply: {
+        status: 200,
+        body: {
+          data: [
+            {
+              id: "3",
+              name: "ci",
+              scopes: ["publish"],
+              createdAt: "2025-01-02T00:00:00.000Z",
+              lastUsedAt: null,
+            },
+          ],
+          pagination: { nextCursor: null, hasMore: false },
+        },
+      },
+    },
+    { method: "DELETE", path: "/tokens/9", reply: { status: 204, body: null } },
+  ]);
+  try {
+    const list = await runCli(["token", "list", "--url", hub.url], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(list.code, 0, list.stderr);
+    assert.match(list.stdout, /ci/);
+
+    const revoked = await runCli(["token", "revoke", "9", "--url", hub.url], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(revoked.code, 0, revoked.stderr);
+    assert.match(revoked.stdout, /Revoked token 9/);
+    const del = hub.requests.find((r) => r.path === "/tokens/9");
+    assert.equal(del.authorization, "Bearer sess-1");
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("sessions list and revoke manage sessions", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "GET",
+      path: "/sessions",
+      reply: {
+        status: 200,
+        body: {
+          data: [
+            {
+              id: "2",
+              createdAt: "2025-01-02T00:00:00.000Z",
+              expiresAt: "2026-01-02T00:00:00.000Z",
+              lastUsedAt: "2025-01-03T00:00:00.000Z",
+            },
+          ],
+          pagination: { nextCursor: null, hasMore: false },
+        },
+      },
+    },
+    { method: "DELETE", path: "/sessions/5", reply: { status: 204, body: null } },
+  ]);
+  try {
+    const list = await runCli(["sessions", "list", "--url", hub.url], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(list.code, 0, list.stderr);
+
+    const revoked = await runCli(["sessions", "revoke", "5", "--url", hub.url], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(revoked.code, 0, revoked.stderr);
+    assert.match(revoked.stdout, /Revoked session 5/);
+    assert.ok(
+      hub.requests.find((r) => r.path === "/sessions/5"),
+      "DELETE /sessions/5 sent",
+    );
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("search prints results and honors --json", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "GET",
+      path: "/search",
+      reply: {
+        status: 200,
+        body: {
+          data: [
+            {
+              namespace: "acme",
+              id: "hello",
+              name: "Hello",
+              version: "1.0.0",
+              description: "Greets everyone",
+              visibility: "public",
+              publishedAt: "2025-01-02T00:00:00.000Z",
+            },
+          ],
+          pagination: { nextCursor: null, hasMore: false },
+        },
+      },
+    },
+  ]);
+  try {
+    const text = await runCli(["search", "hello", "--url", hub.url], { env: { HOME: dir } });
+    assert.equal(text.code, 0, text.stderr);
+    assert.match(text.stdout, /@acme\/hello@1\.0\.0/);
+
+    const json = await runCli(["search", "hello", "--url", hub.url, "--json"], {
+      env: { HOME: dir },
+    });
+    const parsed = JSON.parse(json.stdout);
+    assert.equal(parsed.data[0].id, "hello");
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("info shows an extension's registry detail", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "GET",
+      path: "/@acme/hello",
+      reply: {
+        status: 200,
+        body: {
+          namespace: "acme",
+          id: "hello",
+          name: "Hello",
+          version: "1.0.0",
+          description: "Greets everyone",
+          license: "MIT",
+          author: "Acme",
+          color1: "#0094FF",
+          visibility: "public",
+          publishedAt: "2025-01-02T00:00:00.000Z",
+          versions: [
+            { version: "1.0.0", status: "published", publishedAt: "2025-01-02T00:00:00.000Z" },
+          ],
+        },
+      },
+    },
+  ]);
+  try {
+    const result = await runCli(["info", "@acme/hello", "--url", hub.url], { env: { HOME: dir } });
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /@acme\/hello/);
+    assert.match(result.stdout, /Greets everyone/);
+    assert.match(result.stdout, /MIT/);
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("download saves the compiled blob and resolves the latest version", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "GET",
+      path: "/@acme/hello",
+      reply: { status: 200, body: { namespace: "acme", id: "hello", version: "1.0.0" } },
+    },
+    {
+      method: "GET",
+      path: "/@acme/hello/versions/1.0.0/download",
+      reply: { status: 200, body: { code: "console.log('DOWNLOAD_OK');" } },
+    },
+  ]);
+  try {
+    const out = join(dir, "hello.js");
+    const result = await runCli(["download", "@acme/hello", "-o", out, "--url", hub.url], {
+      env: { HOME: dir },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    const saved = readFileSync(out, "utf8");
+    assert.match(saved, /DOWNLOAD_OK/);
+    assert.ok(hub.requests.find((r) => r.path === "/@acme/hello/versions/1.0.0/download"));
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("stats prints aggregate registry numbers", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "GET",
+      path: "/stats",
+      reply: { status: 200, body: { published: 42, pending: 3, authors: 9 } },
+    },
+  ]);
+  try {
+    const result = await runCli(["stats", "--url", hub.url], { env: { HOME: dir } });
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /42 published/);
+    assert.match(result.stdout, /3 pending/);
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("review lists the queue and approves a pending version", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "GET",
+      path: "/versions",
+      reply: {
+        status: 200,
+        body: {
+          data: [
+            {
+              ownerNamespace: "acme",
+              id: "hello",
+              name: "Hello",
+              version: "1.2.0",
+              description: "d",
+              twextVersion: "1.0.0",
+              createdAt: "2025-01-02T00:00:00.000Z",
+            },
+          ],
+          pagination: { nextCursor: null, hasMore: false },
+        },
+      },
+    },
+    {
+      method: "PATCH",
+      path: "/@acme/hello/versions/1.2.0",
+      reply: {
+        status: 200,
+        body: { namespace: "acme", id: "hello", version: "1.2.0", status: "published" },
+      },
+    },
+  ]);
+  try {
+    const list = await runCli(["review", "list", "--url", hub.url], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(list.code, 0, list.stderr);
+    assert.match(list.stdout, /@acme\/hello@1\.2\.0/);
+
+    const approved = await runCli(["review", "approve", "@acme/hello@1.2.0", "--url", hub.url], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(approved.code, 0, approved.stderr);
+    assert.match(approved.stdout, /Approved @acme\/hello@1\.2\.0/);
+    const patch = hub.requests.find((r) => r.method === "PATCH");
+    assert.deepEqual(patch.body, { status: "approved" });
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});
+
+test("review reject requires a reason and sends it to the hub", async () => {
+  const { dir, cleanup } = tmpHome();
+  const hub = await createHub([
+    {
+      method: "PATCH",
+      path: "/@acme/hello/versions/1.2.0",
+      reply: {
+        status: 200,
+        body: { namespace: "acme", id: "hello", version: "1.2.0", status: "rejected" },
+      },
+    },
+  ]);
+  try {
+    const noReason = await runCli(["review", "reject", "@acme/hello@1.2.0", "--url", hub.url], {
+      env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+    });
+    assert.equal(noReason.code, 1);
+    assert.match(noReason.stderr, /reason is required/i);
+
+    const rejected = await runCli(
+      ["review", "reject", "@acme/hello@1.2.0", "--reason", "Broken blocks.", "--url", hub.url],
+      {
+        env: { HOME: dir, TWEXTHUB_TOKEN: "sess-1" },
+      },
+    );
+    assert.equal(rejected.code, 0, rejected.stderr);
+    assert.match(rejected.stdout, /Rejected @acme\/hello@1\.2\.0/);
+    const patch = hub.requests.find((r) => r.method === "PATCH");
+    assert.deepEqual(patch.body, { status: "rejected", reason: "Broken blocks." });
+  } finally {
+    cleanup();
+    await hub.close();
+  }
+});

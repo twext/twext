@@ -12,6 +12,14 @@ import { logoutCommand } from "./commands/logout.js";
 import { publishCommand } from "./commands/publish.js";
 import { yankCommand } from "./commands/yank.js";
 import { tokenCommand } from "./commands/token.js";
+import { sessionsCommand } from "./commands/sessions.js";
+import { whoamiCommand } from "./commands/whoami.js";
+import { searchCommand } from "./commands/search.js";
+import { infoCommand } from "./commands/info.js";
+import { downloadCommand } from "./commands/download.js";
+import { statsCommand } from "./commands/stats.js";
+import { reviewCommand } from "./commands/review.js";
+import { notificationsCommand } from "./commands/notifications.js";
 
 const OPTIONS = {
   help: { type: "boolean", short: "h" },
@@ -28,6 +36,13 @@ const OPTIONS = {
   scope: { type: "string", multiple: true },
   "expires-in-days": { type: "string" },
   visibility: { type: "string" },
+  all: { type: "boolean" },
+  json: { type: "boolean" },
+  read: { type: "boolean" },
+  wait: { type: "boolean" },
+  "wait-timeout": { type: "string" },
+  limit: { type: "string" },
+  reason: { type: "string" },
 };
 
 function helpText(product) {
@@ -41,15 +56,23 @@ Commands:
   init         Scaffold a new project in a directory
   login        Sign in to a TwextHub hub
   signup       Create a new account on a TwextHub hub
-  logout       Forget the stored hub credentials
+  logout       Revoke the session and forget the stored hub credentials
+  whoami       Show the signed-in account
   publish      Validate, build, and publish to the hub
   yank         Remove a published version from the hub (e.g. twext yank 1.0.0)
-  token        Create an automation token for CI (e.g. twext token create)
+  token        Manage automation tokens (create, list, revoke)
+  sessions     List and revoke sessions
+  search       Search the registry (e.g. twext search "hello world")
+  info         Show an extension's registry detail (e.g. twext info @ns/id)
+  download     Download a compiled extension (e.g. twext download @ns/id@1.0.0)
+  stats        Show registry statistics
+  review       Admin review queue (list, approve, reject)
+  notifications  Show hub notifications (e.g. review decisions)
   help         Show this help
 
 Options:
   -c, --config <file>      Path to ${product.defaults.configFilename} (default: ${product.defaults.configFilename})
-  -o, --out <file>         Override the output path (build only)
+  -o, --out <file>         Override the output path (build/download)
   -f, --force              Overwrite existing files (init only)
   -u, --url <base>         Hub API base URL (default: https://twexts.sdisk.us/api/v1)
   -n, --namespace <name>   Account namespace (login/signup/publish/yank; login default: stored)
@@ -59,7 +82,14 @@ Options:
   --name <name>            Token name (token create only)
   --scope <scope>          Token scope, repeatable (token create only; default: publish)
   --expires-in-days <days> Token lifetime (token create only)
-  --visibility <level>    Registry visibility on publish (public, unlisted, private; default: public)
+  --visibility <level>      Registry visibility on publish (public, unlisted, private; default: public)
+  --limit <n>               Page size (search/review list only; default: 20)
+  --reason <text>           Rejection reason (review reject only)
+  --all                     Include read notifications (notifications only)
+  --json                    Print raw API JSON (search/info/stats/whoami/token/sessions/review/notifications)
+  --read                    Mark the listed notifications read (notifications only)
+  --wait                    Poll until the pending version has a review decision (notifications only)
+  --wait-timeout <seconds>  --wait timeout (notifications only; default 900)
   -h, --help               Show this help
   -v, --version            Print the version`;
 }
@@ -97,13 +127,32 @@ async function main(args) {
     case "signup":
       return (await signupCommand(product, values, log)) ? 0 : 1;
     case "logout":
-      return logoutCommand(product, log) ? 0 : 1;
+      return (await logoutCommand(product, values, log)) ? 0 : 1;
+    case "whoami":
+      return (await whoamiCommand(product, values, log)) ? 0 : 1;
     case "publish":
       return (await publishCommand(product, configPath, values, log)) ? 0 : 1;
     case "yank":
       return (await yankCommand(product, positionals[1], configPath, values, log)) ? 0 : 1;
     case "token":
-      return (await tokenCommand(product, positionals[1], values, log)) ? 0 : 1;
+      return (await tokenCommand(product, positionals[1], positionals[2], values, log)) ? 0 : 1;
+    case "sessions":
+      return (await sessionsCommand(product, positionals[1], positionals[2], values, log)) ? 0 : 1;
+    case "search":
+      return (await searchCommand(product, positionals[1], values, log)) ? 0 : 1;
+    case "info":
+      return (await infoCommand(product, positionals[1], values, log)) ? 0 : 1;
+    case "download":
+      return (await downloadCommand(product, positionals[1], values, log)) ? 0 : 1;
+    case "stats":
+      return (await statsCommand(product, values, log)) ? 0 : 1;
+    case "review":
+      return (await reviewCommand(product, positionals[1], positionals[2], values, log)) ? 0 : 1;
+    case "notifications": {
+      // Returns 0 (listed/approved), 1 (rejected or error), 2 (--wait timeout).
+      const code = await notificationsCommand(product, configPath, values, log);
+      return typeof code === "number" ? code : code ? 0 : 1;
+    }
     default:
       log.error(`Unknown command "${command}"`);
       console.log(helpText(product));
