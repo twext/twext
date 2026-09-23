@@ -56,7 +56,7 @@ export async function publishCommand(
     return false;
   }
 
-await warnUnread(product, { url, token }, log);
+  await warnUnread(product, { url, token }, log);
 
   log.progress(
     `Publishing ${id}@${version} (${fileCount} source file${fileCount === 1 ? "" : "s"}) to @${namespace}...`,
