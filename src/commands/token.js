@@ -54,6 +54,10 @@ export async function tokenCommand(
     log.error(err.message);
     return false;
   }
+  if (!created || typeof created.token !== "string" || !Array.isArray(created.scopes)) {
+    log.error("The hub returned an invalid token response.");
+    return false;
+  }
   log.success(`Created token "${created.name}" with scope ${created.scopes.join(", ")}`);
   log.info("The token is shown once; keep it out of the repository.");
   log.bullet(created.token);

@@ -160,6 +160,90 @@ blocks:
   }
 });
 
+test("validate rejects a top-level return in setup", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+version: "0.1.0"
+extension:
+  id: setupret
+blocks:
+  - opcode: ping
+    blockType: reporter
+    text: "ping"
+`,
+    `export const blocks = { ping() { return "pong"; } };
+export function setup() {
+  if (typeof window === "undefined") return;
+  console.log("setup ran");
+}
+`,
+  );
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('setup must not "return"')));
+});
+
+test("validate allows returns nested inside setup helpers", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+version: "0.1.0"
+extension:
+  id: setupnest
+blocks:
+  - opcode: ping
+    blockType: reporter
+    text: "ping"
+`,
+    `export const blocks = { ping() { return "pong"; } };
+export function setup() {
+  function helper() {
+    return 1;
+  }
+  console.log(helper());
+}
+`,
+  );
+  assert.equal(result.ok, true, result.errors.join("; "));
+});
+
+test("multi-line function setups keep their lines aligned", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "twext-setup-indent-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(
+      join(dir, "twext.yml"),
+      `entryPoint: "src/index.js"
+version: "0.1.0"
+extension:
+  id: setupindent
+blocks:
+  - opcode: ping
+    blockType: reporter
+    text: "ping"
+`,
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "src", "index.js"),
+      `export const blocks = { ping() { return "pong"; } };
+export function setup() {
+  console.log("a");
+  console.log("b");
+}
+`,
+      "utf8",
+    );
+
+    const project = await loadProject(join(dir, "twext.yml"));
+    const code = compileExtension(project, loadProduct());
+    const first = /^( *)console\.log\("a"\);$/m.exec(code);
+    const second = /^( *)console\.log\("b"\);$/m.exec(code);
+    assert.ok(first && second, "both setup lines are emitted");
+    assert.equal(first[1], second[1], "setup lines share one indent");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("dedent leaves whitespace inside template literals intact", async () => {
   const dir = mkdtempSync(join(tmpdir(), "twext-dedent-"));
   try {
@@ -288,6 +372,7 @@ blocks:
 test("validate derives a valid class name for numeric-like ids", async () => {
   const result = await validateTempProject(
     `entryPoint: "src/index.js"
+version: "0.1.0"
 outputPath: "dist/extension.js"
 extension:
   id: "123tools"
@@ -348,6 +433,7 @@ blocks:
 test("validate accepts handlers that reference setup names and globals", async () => {
   const result = await validateTempProject(
     `entryPoint: "src/index.js"
+version: "0.1.0"
 outputPath: "dist/extension.js"
 extension:
   id: refok
@@ -410,6 +496,7 @@ test("compiles menus, separators, and labels into getInfo", async () => {
     writeFileSync(
       join(dir, "twext.yml"),
       `entryPoint: "src/index.js"
+version: "0.1.0"
 outputPath: "dist/extension.js"
 extension:
   id: menudemo
@@ -481,6 +568,7 @@ blocks:
 test("validate accepts menus and separators", async () => {
   const result = await validateTempProject(
     `entryPoint: "src/index.js"
+version: "0.1.0"
 outputPath: "dist/extension.js"
 extension:
   id: menuok
@@ -594,6 +682,7 @@ blocks:
 test("validate accepts object menu items with both text and value", async () => {
   const result = await validateTempProject(
     `entryPoint: "src/index.js"
+version: "0.1.0"
 outputPath: "dist/extension.js"
 extension:
   id: menugood

@@ -2,14 +2,20 @@ import { readProjectConfig } from "../project.js";
 import { EXTENSION_ID_PATTERN } from "../validate.js";
 import { resolveHubUrl, resolveNamespace, resolveToken, yankVersion } from "../hub.js";
 
-export async function yankCommand(product, version, configPath, { url, token }, log) {
+export async function yankCommand(
+  product,
+  version,
+  configPath,
+  { url, token, namespace: namespaceFlag },
+  log,
+) {
   if (!version) {
     log.error("Usage: twext yank <version>");
     return false;
   }
 
   const hub = resolveHubUrl(url);
-  const namespace = resolveNamespace(undefined, hub);
+  const namespace = resolveNamespace(namespaceFlag, hub);
   const authToken = resolveToken(token, hub);
   if (!namespace) {
     log.error("Not logged in. Run twext login first.");

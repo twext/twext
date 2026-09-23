@@ -79,6 +79,23 @@ test("returns null for non-function source", () => {
   assert.equal(parseFunctionSource("const x = 1"), null);
 });
 
+test("default parameter containing a brace group", () => {
+  const parsed = parseFunctionSource(`function f(s = ") {") {
+  return s;
+}`);
+  assert.ok(parsed, "the parameter list must not be split on the default value");
+  assert.equal(parsed.params, `s = ") {"`);
+  assert.match(parsed.body, /return s;/);
+});
+
+test("comment between a method name and its params", () => {
+  const parsed = parseFunctionSource(`hello /* note */ (args) {
+  return 1;
+}`);
+  assert.ok(parsed);
+  assert.equal(parsed.params, "args");
+});
+
 test("rejects generator declarations", () => {
   assert.equal(
     parseFunctionSource(`function* gen() {

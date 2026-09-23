@@ -27,6 +27,7 @@ const OPTIONS = {
   name: { type: "string" },
   scope: { type: "string", multiple: true },
   "expires-in-days": { type: "string" },
+  visibility: { type: "string" },
 };
 
 function helpText(product) {
@@ -50,14 +51,15 @@ Options:
   -c, --config <file>      Path to ${product.defaults.configFilename} (default: ${product.defaults.configFilename})
   -o, --out <file>         Override the output path (build only)
   -f, --force              Overwrite existing files (init only)
-  -u, --url <base>         Hub API base URL (default: https://twexts.sdisk.us/api/v0)
-  -n, --namespace <name>   Account namespace (login/signup; login default: stored)
+  -u, --url <base>         Hub API base URL (default: https://twexts.sdisk.us/api/v1)
+  -n, --namespace <name>   Account namespace (login/signup/publish/yank; login default: stored)
   --password <password>    Account password (login/signup; prompts when omitted)
   --display-name <name>    Account display name (signup only)
   --token <token>          Bearer token override (default: \\$TWEXTHUB_TOKEN, then stored)
   --name <name>            Token name (token create only)
   --scope <scope>          Token scope, repeatable (token create only; default: publish)
   --expires-in-days <days> Token lifetime (token create only)
+  --visibility <level>    Registry visibility on publish (public, unlisted, private; default: public)
   -h, --help               Show this help
   -v, --version            Print the version`;
 }

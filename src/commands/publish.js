@@ -1,5 +1,6 @@
-import { compileExtension } from "../compile.js";
+import { stringify as stringifyYaml } from "yaml";
 import { validateProject } from "../validate.js";
+import { collectSources } from "../sources.js";
 import {
   HubError,
   acceptTerms,
@@ -9,25 +10,20 @@ import {
   resolveToken,
 } from "../hub.js";
 
-function manifestOf(config) {
-  const id = config.extension.id;
-  const manifest = {
-    id,
-    name: config.extension.name ?? config.name ?? id,
-    version: String(config.version),
-    license: String(config.license ?? "MIT"),
-    description: String(config.description ?? ""),
-  };
-  if (typeof config.author === "string" && config.author) manifest.author = config.author;
-  for (const color of ["color1", "color2", "color3"]) {
-    if (typeof config.extension[color] === "string" && config.extension[color]) {
-      manifest[color] = config.extension[color];
-    }
-  }
-  return manifest;
+// outputPath is the only purely local key: the hub compiles the upload
+// itself, so where this machine writes the build means nothing there.
+function uploadManifest(config) {
+  const doc = { ...config };
+  delete doc.outputPath;
+  return stringifyYaml(doc);
 }
 
-export async function publishCommand(product, configPath, { url, token }, log) {
+export async function publishCommand(
+  product,
+  configPath,
+  { url, token, namespace: namespaceFlag, visibility },
+  log,
+) {
   const result = await validateProject(configPath);
   if (!result.ok) {
     for (const message of result.errors) log.error(message);
@@ -35,12 +31,19 @@ export async function publishCommand(product, configPath, { url, token }, log) {
   }
   for (const message of result.warnings) log.warn(message);
 
-  const { config } = result.project;
-  const manifest = manifestOf(config);
-  const code = compileExtension(result.project, product);
+  const { config, root } = result.project;
+  const id = config.extension.id;
+  const version = String(config.version).trim();
+  const manifest = uploadManifest(config);
+  const sources = collectSources(root, { manifestPath: configPath, outputPath: config.outputPath });
+  const fileCount = Object.keys(sources).length;
+  if (fileCount === 0) {
+    log.error("No source files found to publish.");
+    return false;
+  }
 
   const hub = resolveHubUrl(url);
-  const namespace = resolveNamespace(undefined, hub);
+  const namespace = resolveNamespace(namespaceFlag, hub);
   const authToken = resolveToken(token, hub);
   const explicitToken = token ?? process.env.TWEXTHUB_TOKEN;
   if (!namespace) {
@@ -52,12 +55,16 @@ export async function publishCommand(product, configPath, { url, token }, log) {
     return false;
   }
 
-  log.progress(`Publishing ${manifest.id}@${manifest.version} to @${namespace}...`);
+  log.progress(
+    `Publishing ${id}@${version} (${fileCount} source file${fileCount === 1 ? "" : "s"}) to @${namespace}...`,
+  );
 
-  const publish = () => publishVersion(hub, authToken, namespace, manifest.id, manifest, code);
-  let version;
+  const payload = { manifest, sources, twext: product.version };
+  if (visibility) payload.visibility = visibility;
+  const publish = () => publishVersion(hub, authToken, namespace, id, payload);
+  let published;
   try {
-    version = await publish();
+    published = await publish();
   } catch (err) {
     if (!(err instanceof HubError && err.status === 403 && /terms/i.test(err.message))) {
       log.error(err.message);
@@ -72,19 +79,24 @@ export async function publishCommand(product, configPath, { url, token }, log) {
     log.progress("Accepting the current Terms of Service...");
     try {
       await acceptTerms(hub, authToken);
-      version = await publish();
+      published = await publish();
     } catch (acceptErr) {
       log.error(acceptErr.message);
       return false;
     }
   }
 
-  if (version.status === "pending") {
-    log.success(`${manifest.id}@${manifest.version} submitted for review (status: pending).`);
+  if (!published || typeof published.status !== "string") {
+    log.error("The hub returned an invalid publish response.");
+    return false;
+  }
+  if (published.status === "pending") {
+    log.success(`${id}@${version} submitted for review (status: pending).`);
     log.info("An admin must approve it before it appears in the registry.");
   } else {
-    log.success(`Published ${manifest.id}@${manifest.version}`);
-    if (version.dist?.downloadUrl) log.bullet(version.dist.downloadUrl);
+    log.success(`Published ${id}@${version}`);
+    if (published.visibility) log.info(`Visibility: ${published.visibility}`);
+    if (published.dist?.downloadUrl) log.bullet(published.dist.downloadUrl);
   }
   return true;
 }

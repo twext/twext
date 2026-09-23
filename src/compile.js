@@ -297,7 +297,7 @@ export function compileExtension(project, product) {
     blocks: config.blocks.map(buildBlock),
   };
 
-  const setup = dedent(resolveSetup(mod.setup).trim());
+  const setup = dedent(resolveSetup(mod.setup)).trim();
   const lines = ["(function (Scratch) {", '  "use strict";'];
   if (setup) lines.push("", indentCode(setup, 1));
   lines.push("", `  class ${className} {`, "    getInfo() {", "      return {");

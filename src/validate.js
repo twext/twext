@@ -3,12 +3,14 @@ import { loadProject } from "./project.js";
 import {
   RUNTIME_GLOBALS,
   handlerFreeVariables,
+  hasTopLevelReturn,
   programFreeVariables,
   topLevelDeclarations,
 } from "./free-vars.js";
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 export const EXTENSION_ID_PATTERN = /^[a-z0-9]{1,64}$/;
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const RESERVED_WORDS = new Set([
   "await",
@@ -74,6 +76,12 @@ export async function validateProject(configPath) {
 
   const { config, module: mod } = project;
   const menuNames = new Set();
+
+  if (typeof config.version !== "string" || config.version.trim() === "") {
+    errors.push('twext.yml must define a "version" (e.g. "0.1.0")');
+  } else if (!SEMVER_PATTERN.test(config.version.trim())) {
+    errors.push(`version "${config.version}" must be a SemVer string like "1.0.0"`);
+  }
 
   if (!config.extension || typeof config.extension !== "object") {
     errors.push('twext.yml must define an "extension" section');
@@ -248,6 +256,13 @@ function validateReferences(errors, { config, module: mod }) {
   const available = new Set(RUNTIME_GLOBALS);
   if (setupText.trim()) {
     try {
+      // The setup body is inlined into the extension IIFE, so a top-level
+      // return there would exit before the extension registers itself.
+      if (hasTopLevelReturn(setupText)) {
+        errors.push(
+          'setup must not "return" at the top level; its body runs inside the extension IIFE, so a return would skip registration',
+        );
+      }
       for (const name of topLevelDeclarations(setupText)) available.add(name);
       const missing = [...programFreeVariables(setupText)].filter((name) => !available.has(name));
       if (missing.length > 0) {

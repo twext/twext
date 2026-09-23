@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 const cli = fileURLToPath(new URL("../src/cli.js", import.meta.url));
 const fixture = (name) => fileURLToPath(new URL(`../test-fixtures/${name}`, import.meta.url));
@@ -145,8 +146,15 @@ test("login stores credentials and publish auto-accepts terms with a session tok
     assert.equal(publishes.length, 2, "re-published after accepting terms");
     assert.equal(publishes[0].authorization, "Bearer sess-1");
     assert.equal(publishes[1].authorization, "Bearer sess-1");
-    assert.ok(publishes[1].body.code.includes("class SuperUtilitiesExtension"));
-    assert.equal(publishes[1].body.manifest.id, "superutilities");
+    assert.equal(publishes[1].body.code, undefined, "the hub compiles; no prebuilt code is sent");
+    const manifest = parseYaml(publishes[1].body.manifest);
+    assert.equal(manifest.extension.id, "superutilities");
+    assert.equal(manifest.version, "1.0.0");
+    assert.equal(manifest.entryPoint, "src/index.js");
+    assert.ok(!("outputPath" in manifest), "the local build path is stripped");
+    assert.ok(publishes[1].body.sources["src/index.js"], "project sources are uploaded");
+    assert.match(publishes[1].body.sources["src/index.js"], /Super Utilities|logMessage|import/);
+    assert.equal(typeof publishes[1].body.twext, "string", "CLI version is reported");
   } finally {
     cleanup();
     await hub.close();
@@ -539,7 +547,7 @@ test("resolveHubUrl falls back to the public hub", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(
       result.stdout.trim(),
-      "https://twexts.sdisk.us/api/v0 https://example.com/v0 https://custom.test",
+      "https://twexts.sdisk.us/api/v1 https://example.com/v0 https://custom.test",
     );
   } finally {
     cleanup();

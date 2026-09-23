@@ -115,6 +115,34 @@ test("the default command is build", () => {
   }
 });
 
+test("validate requires a version", () => {
+  const { dir, cleanup } = tmpProject();
+  try {
+    runCli(["init"], dir);
+    const yml = readFileSync(join(dir, "twext.yml"), "utf8");
+    writeFileSync(join(dir, "twext.yml"), yml.replace(/^version:.*\n/m, ""), "utf8");
+    const result = runCli(["validate"], dir);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must define a "version"/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("validate rejects a non-SemVer version", () => {
+  const { dir, cleanup } = tmpProject();
+  try {
+    runCli(["init"], dir);
+    const yml = readFileSync(join(dir, "twext.yml"), "utf8");
+    writeFileSync(join(dir, "twext.yml"), yml.replace(/^version:.*$/m, 'version: "v1"'), "utf8");
+    const result = runCli(["validate"], dir);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must be a SemVer string/);
+  } finally {
+    cleanup();
+  }
+});
+
 test("unknown commands fail and --version prints the version", async () => {
   const { dir, cleanup } = tmpProject();
   try {

@@ -5,7 +5,7 @@
   "description": "Manifest for a Twext extension project (twext.yml).",
   "type": "object",
   "additionalProperties": true,
-  "required": ["entryPoint", "extension", "blocks"],
+  "required": ["entryPoint", "version", "extension", "blocks"],
   "properties": {
     "name": {
       "type": "string",
@@ -13,7 +13,8 @@
     },
     "version": {
       "type": "string",
-      "description": "Project version."
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$",
+      "description": "Project version. SemVer, required — publish refuses manifests without it."
     },
     "description": {
       "type": "string",

@@ -7,7 +7,7 @@ const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
 export const NAMESPACE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 
-export const DEFAULT_HUB_URL = "https://twexts.sdisk.us/api/v0";
+export const DEFAULT_HUB_URL = "https://twexts.sdisk.us/api/v1";
 
 export class HubError extends Error {
   constructor(message, status) {
@@ -99,13 +99,26 @@ async function hubRequest(base, path, { method = "GET", token, body } = {}) {
     throw new HubError(`Could not reach the hub at ${base}: ${err.message}`);
   }
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
   if (!response.ok) {
     const detail =
       data?.detail ??
       data?.errors?.map((error) => `${error.field}: ${error.message}`).join("; ") ??
-      (data?.title ? `${data.title} (HTTP ${response.status})` : `HTTP ${response.status}`);
+      (data?.title ? `${data.title} (HTTP ${response.status})` : null) ??
+      (text && data === null
+        ? `The hub returned a non-JSON error page (HTTP ${response.status}).`
+        : `HTTP ${response.status}`);
     throw new HubError(detail, response.status);
+  }
+  if (text && data === null) {
+    throw new HubError(`The hub returned an invalid JSON response (HTTP ${response.status}).`);
   }
   return data;
 }
@@ -125,11 +138,11 @@ export async function acceptTerms(base, token) {
   return hubRequest(base, "/terms/accept", { method: "POST", token });
 }
 
-export async function publishVersion(base, token, namespace, id, manifest, code) {
+export async function publishVersion(base, token, namespace, id, payload) {
   return hubRequest(base, `/@${namespace}/${id}/versions`, {
     method: "POST",
     token,
-    body: { manifest, code },
+    body: payload,
   });
 }
 
