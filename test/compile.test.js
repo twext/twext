@@ -554,3 +554,64 @@ blocks:
   assert.ok(result.errors.some((e) => e.includes('Menu "A" items must be an array')));
   assert.ok(result.errors.some((e) => e.includes('Menu "B" acceptReporters must be a boolean')));
 });
+
+test("validate rejects menus without items and items missing text or value", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: menuFields
+  menus:
+    NOITEMS:
+      acceptReporters: true
+    NOTEXT:
+      items:
+        - value: "x"
+    NOVALUE:
+      items:
+        - text: "x"
+blocks:
+  - opcode: one
+    blockType: reporter
+    text: "one"
+`,
+    "export const blocks = { one() { return 1; } };\n",
+  );
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((e) =>
+      e.includes('Menu "NOITEMS" must define items or be a plain list of items'),
+    ),
+  );
+  assert.ok(
+    result.errors.some((e) => e.includes('Menu "NOTEXT" item text and value must be strings')),
+  );
+  assert.ok(
+    result.errors.some((e) => e.includes('Menu "NOVALUE" item text and value must be strings')),
+  );
+});
+
+test("validate accepts object menu items with both text and value", async () => {
+  const result = await validateTempProject(
+    `entryPoint: "src/index.js"
+outputPath: "dist/extension.js"
+extension:
+  id: menugood
+  menus:
+    CHOICES:
+      items:
+        - text: "One"
+          value: "1"
+blocks:
+  - opcode: one
+    blockType: reporter
+    text: "one"
+    arguments:
+      C:
+        type: string
+        menu: CHOICES
+`,
+    "export const blocks = { one() { return 1; } };\n",
+  );
+  assert.equal(result.ok, true, result.errors.join("; "));
+});

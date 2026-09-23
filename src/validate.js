@@ -196,8 +196,10 @@ function validateMenuItems(items, label, errors) {
     if (typeof item === "string") continue;
     if (item && typeof item === "object" && !Array.isArray(item)) {
       if (
-        (item.text !== undefined && typeof item.text !== "string") ||
-        (item.value !== undefined && typeof item.value !== "string")
+        !hasOwn(item, "text") ||
+        !hasOwn(item, "value") ||
+        typeof item.text !== "string" ||
+        typeof item.value !== "string"
       ) {
         errors.push(`${label} item text and value must be strings`);
       }

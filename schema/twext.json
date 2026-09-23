@@ -215,6 +215,7 @@
     },
     "menu": {
       "type": "object",
+      "required": ["items"],
       "properties": {
         "acceptReporters": {
           "type": "boolean",
