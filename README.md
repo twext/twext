@@ -71,8 +71,12 @@ Publish and manage a TwextHub hub from the CLI:
 ```bash
 twext signup
 twext login
+twext whoami
 twext publish
 twext yank 1.0.0
+twext token list
+twext sessions list
+twext logout
 ```
 
 `signup` creates a new account. `login` signs in with your `@namespace` and password. Credentials live in `~/.twext/config.json` (mode `0600`) with `TWEXTHUB_URL`, `TWEXTHUB_TOKEN`, and `TWEXTHUB_NAMESPACE` as environment overrides for automation. The default hub is `https://twexts.sdisk.us/api/v1`; pass `-u` to point at another one. Hubs must be served over HTTPS, except loopback URLs (such as `http://localhost`) used in local development.
@@ -96,6 +100,25 @@ twext notifications --wait       # poll until this project's pending version is 
 ```
 
 `--wait` matches decisions against the local `twext.yml` (`extension.id` and `version`), exits `0` on approval, `1` on rejection, and `2` when `--wait-timeout` seconds (default 900) elapse without a decision. `publish` and `yank` print a one-line unread count when the hub has notifications for you; the line is suppressed for automation tokens and never fails the command.
+
+Admins review the queue with `twext review list`, then approve or reject a pending version:
+
+```bash
+twext review list
+twext review approve @acme/hello@1.2.0
+twext review reject @acme/hello@1.2.0 --reason "Blocks are broken."
+```
+
+`reject` prompts for a reason when `--reason` is omitted. `search`, `info`, and `download` read from the registry without authentication; `download` fetches the compiled blob and defaults to the latest version:
+
+```bash
+twext search hello
+twext info @acme/hello
+twext download @acme/hello -o hello.js
+twext stats
+```
+
+Automation tokens and sessions are managed with `twext token list|create|revoke` and `twext sessions list|revoke`; `logout` revokes the current session on the hub before forgetting the stored credentials. Most read commands (`whoami`, `search`, `info`, `download`, `stats`, `review`, `token`, `sessions`) print machine-readable output with `--json`, and `twext logout` still works when the hub is unreachable.
 
 Point either command at a different manifest with `-c`; override the build output with `-o`.
 
