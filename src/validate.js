@@ -73,6 +73,7 @@ export async function validateProject(configPath) {
   }
 
   const { config, module: mod } = project;
+  const menuNames = new Set();
 
   if (!config.extension || typeof config.extension !== "object") {
     errors.push('twext.yml must define an "extension" section');
@@ -104,6 +105,7 @@ export async function validateProject(configPath) {
         );
       }
     }
+    validateMenus(errors, menuNames, ext.menus);
   }
 
   if (!Array.isArray(config.blocks) || config.blocks.length === 0) {
@@ -111,6 +113,12 @@ export async function validateProject(configPath) {
   } else {
     const declared = new Set();
     for (const block of config.blocks) {
+      if (typeof block === "string") {
+        if (block !== "---") {
+          errors.push(`Blocks entry "${block}" must be a block mapping or a "---" separator`);
+        }
+        continue;
+      }
       if (!block || typeof block !== "object" || Array.isArray(block)) {
         errors.push("Each blocks entry must be a mapping");
         continue;
@@ -163,6 +171,11 @@ export async function validateProject(configPath) {
                 `Block "${name}" argument "${argumentName}" uses unknown type "${argument.type}"`,
               );
             }
+            if (argument.menu !== undefined && !menuNames.has(argument.menu)) {
+              errors.push(
+                `Block "${name}" argument "${argumentName}" references unknown menu "${argument.menu}"`,
+              );
+            }
           }
         }
       }
@@ -176,6 +189,51 @@ export async function validateProject(configPath) {
   }
 
   return { ok: errors.length === 0, errors, warnings, project };
+}
+
+function validateMenuItems(items, label, errors) {
+  for (const item of items) {
+    if (typeof item === "string") continue;
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      if (
+        (item.text !== undefined && typeof item.text !== "string") ||
+        (item.value !== undefined && typeof item.value !== "string")
+      ) {
+        errors.push(`${label} item text and value must be strings`);
+      }
+      continue;
+    }
+    errors.push(`${label} items must be strings or { text, value } mappings`);
+  }
+}
+
+function validateMenus(errors, menuNames, menus) {
+  if (menus === undefined) return;
+  if (!menus || typeof menus !== "object" || Array.isArray(menus)) {
+    errors.push("extension.menus must be a mapping of menu names to menu definitions");
+    return;
+  }
+  for (const [menuName, menu] of Object.entries(menus)) {
+    menuNames.add(menuName);
+    if (Array.isArray(menu)) {
+      validateMenuItems(menu, `Menu "${menuName}"`, errors);
+      continue;
+    }
+    if (!menu || typeof menu !== "object") {
+      errors.push(`Menu "${menuName}" must be a list of items or a mapping`);
+      continue;
+    }
+    if (menu.acceptReporters !== undefined && typeof menu.acceptReporters !== "boolean") {
+      errors.push(`Menu "${menuName}" acceptReporters must be a boolean`);
+    }
+    if (menu.items === undefined) {
+      errors.push(`Menu "${menuName}" must define items or be a plain list of items`);
+    } else if (!Array.isArray(menu.items)) {
+      errors.push(`Menu "${menuName}" items must be an array`);
+    } else {
+      validateMenuItems(menu.items, `Menu "${menuName}"`, errors);
+    }
+  }
 }
 
 function validateReferences(errors, { config, module: mod }) {

@@ -78,15 +78,27 @@
           "type": "string",
           "pattern": "^#[0-9a-fA-F]{6}$",
           "description": "Tertiary block color as a hex value."
+        },
+        "menus": {
+          "$ref": "#/definitions/menus",
+          "description": "Dropdowns that block arguments reference via the `menu` property."
         }
       }
     },
     "blocks": {
       "type": "array",
       "minItems": 1,
-      "description": "Block definitions. Every non-label block maps an opcode to a handler exported by the entryPoint.",
+      "description": "Block definitions, \"---\" separators, and labels. Every non-label block maps an opcode to a handler exported by the entryPoint.",
       "items": {
-        "$ref": "#/definitions/block"
+        "anyOf": [
+          {
+            "const": "---",
+            "description": "A horizontal separator in the block palette."
+          },
+          {
+            "$ref": "#/definitions/block"
+          }
+        ]
       }
     },
     "block": {
@@ -153,6 +165,10 @@
         },
         "defaultValue": {
           "description": "Value used when the argument is left empty."
+        },
+        "menu": {
+          "type": "string",
+          "description": "Name of a menu declared in extension.menus that this argument selects from."
         }
       }
     },
@@ -160,6 +176,54 @@
       "type": "string",
       "enum": ["string", "text", "number", "boolean", "angle", "color", "matrix", "note"],
       "description": "TurboWarp argument type. Defaults to string."
+    },
+    "menus": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/menuItems"
+          },
+          {
+            "$ref": "#/definitions/menu"
+          }
+        ]
+      }
+    },
+    "menuItems": {
+      "type": "array",
+      "description": "Menu items. Strings are shown as-is; objects display `text` and pass `value` to the block.",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": ["text", "value"],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "menu": {
+      "type": "object",
+      "properties": {
+        "acceptReporters": {
+          "type": "boolean",
+          "description": "Whether the menu allows reporter blocks to be dropped in. Almost always true."
+        },
+        "items": {
+          "$ref": "#/definitions/menuItems"
+        }
+      }
     }
   }
 }

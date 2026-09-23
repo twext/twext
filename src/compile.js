@@ -221,6 +221,7 @@ export function pascalCase(text) {
 }
 
 function buildBlock(block) {
+  if (typeof block === "string") return block;
   const type =
     block.blockType == null
       ? BLOCK_TYPES.reporter
@@ -250,6 +251,18 @@ function buildArgument(argument) {
     : ARGUMENT_TYPES.string;
   const out = { type: enumCode(type) };
   if (argument.defaultValue !== undefined) out.defaultValue = argument.defaultValue;
+  if (argument.menu !== undefined) out.menu = argument.menu;
+  return out;
+}
+
+function buildMenus(menus) {
+  const out = {};
+  for (const [name, menu] of Object.entries(menus)) {
+    out[name] = Array.isArray(menu) ? { items: menu } : { items: menu.items ?? [] };
+    if (!Array.isArray(menu) && menu.acceptReporters !== undefined) {
+      out[name].acceptReporters = menu.acceptReporters;
+    }
+  }
   return out;
 }
 
@@ -280,6 +293,7 @@ export function compileExtension(project, product) {
     color1: ext.color1 ?? fallback,
     ...(ext.color2 !== undefined && { color2: ext.color2 }),
     ...(ext.color3 !== undefined && { color3: ext.color3 }),
+    ...(ext.menus !== undefined && { menus: buildMenus(ext.menus) }),
     blocks: config.blocks.map(buildBlock),
   };
 
@@ -289,7 +303,9 @@ export function compileExtension(project, product) {
   lines.push("", `  class ${className} {`, "    getInfo() {", "      return {");
   lines.push(...emitFields(info, 4));
   lines.push("      };", "    }");
-  const nonLabels = config.blocks.filter((block) => block.blockType !== "label");
+  const nonLabels = config.blocks.filter(
+    (block) => typeof block !== "string" && block.blockType !== "label",
+  );
   const methods = nonLabels
     .map((block) => renderMethod(block.opcode, mod.blocks[block.opcode]))
     .join("\n\n");
