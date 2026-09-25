@@ -1,30 +1,45 @@
-import { compileExtension } from "../compile.js";
+import { readdirSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { create as createTar } from "tar";
 import { validateProject } from "../validate.js";
 import {
   HubError,
   acceptTerms,
-  publishVersion,
+  publishTarball,
   resolveHubUrl,
   resolveNamespace,
   resolveToken,
 } from "../hub.js";
 
-function manifestOf(config) {
-  const id = config.extension.id;
-  const manifest = {
-    id,
-    name: config.extension.name ?? config.name ?? id,
-    version: String(config.version),
-    license: String(config.license ?? "MIT"),
-    description: String(config.description ?? ""),
-  };
-  if (typeof config.author === "string" && config.author) manifest.author = config.author;
-  for (const color of ["color1", "color2", "color3"]) {
-    if (typeof config.extension[color] === "string" && config.extension[color]) {
-      manifest[color] = config.extension[color];
-    }
+// Files that never belong in a published tarball: build output and dependency
+// trees the hub neither wants nor needs.
+const EXCLUDED = new Set(["dist", "node_modules"]);
+
+function walk(dir, root, files) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (EXCLUDED.has(entry.name)) continue;
+    const abs = join(dir, entry.name);
+    if (entry.isDirectory()) walk(abs, root, files);
+    else files.push(relative(root, abs));
   }
-  return manifest;
+  return files;
+}
+
+// Packs the project directory (twext.yml's directory) into a gzipped tarball,
+// skipping dist/ and node_modules/. Entry paths stay portable so the hub can
+// extract them anywhere.
+export function packProject(root) {
+  const files = walk(resolve(root), resolve(root), []);
+  if (!files.includes("twext.yml")) {
+    throw new Error("The project directory has no twext.yml; nothing to publish.");
+  }
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const stream = createTar({ gzip: true, portable: true, cwd: root }, files);
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
 }
 
 export async function publishCommand(product, configPath, { url, token }, log) {
@@ -35,9 +50,15 @@ export async function publishCommand(product, configPath, { url, token }, log) {
   }
   for (const message of result.warnings) log.warn(message);
 
-  const { config } = result.project;
-  const manifest = manifestOf(config);
-  const code = compileExtension(result.project, product);
+  const { config, root } = result.project;
+
+  let tarball;
+  try {
+    tarball = await packProject(root);
+  } catch (err) {
+    log.error(err.message);
+    return false;
+  }
 
   const hub = resolveHubUrl(url);
   const namespace = resolveNamespace(undefined, hub);
@@ -52,9 +73,10 @@ export async function publishCommand(product, configPath, { url, token }, log) {
     return false;
   }
 
-  log.progress(`Publishing ${manifest.id}@${manifest.version} to @${namespace}...`);
+  const id = config.extension.id;
+  log.progress(`Publishing ${id}@${config.version} to @${namespace}...`);
 
-  const publish = () => publishVersion(hub, authToken, namespace, manifest.id, manifest, code);
+  const publish = () => publishTarball(hub, authToken, namespace, id, tarball);
   let version;
   try {
     version = await publish();
@@ -80,11 +102,19 @@ export async function publishCommand(product, configPath, { url, token }, log) {
   }
 
   if (version.status === "pending") {
-    log.success(`${manifest.id}@${manifest.version} submitted for review (status: pending).`);
+    log.success(`${id}@${config.version} submitted for review (status: pending).`);
     log.info("An admin must approve it before it appears in the registry.");
   } else {
-    log.success(`Published ${manifest.id}@${manifest.version}`);
+    log.success(`Published ${id}@${config.version}`);
     if (version.dist?.downloadUrl) log.bullet(version.dist.downloadUrl);
+  }
+
+  // The hub compiled the uploaded source; its build log may carry warnings the
+  // local build did not surface.
+  if (version.buildLog) {
+    for (const line of version.buildLog.split("\n")) {
+      if (/warn/i.test(line)) log.warn(line.trim());
+    }
   }
   return true;
 }

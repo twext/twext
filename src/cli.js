@@ -50,7 +50,7 @@ Options:
   -c, --config <file>      Path to ${product.defaults.configFilename} (default: ${product.defaults.configFilename})
   -o, --out <file>         Override the output path (build only)
   -f, --force              Overwrite existing files (init only)
-  -u, --url <base>         Hub API base URL (default: https://twexts.sdisk.us/api/v0)
+  -u, --url <base>         Hub API base URL (default: https://twexts.sdisk.us/api/v1)
   -n, --namespace <name>   Account namespace (login/signup; login default: stored)
   --password <password>    Account password (login/signup; prompts when omitted)
   --display-name <name>    Account display name (signup only)

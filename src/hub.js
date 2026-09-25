@@ -7,7 +7,7 @@ const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
 export const NAMESPACE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 
-export const DEFAULT_HUB_URL = "https://twexts.sdisk.us/api/v0";
+export const DEFAULT_HUB_URL = "https://twexts.sdisk.us/api/v1";
 
 export class HubError extends Error {
   constructor(message, status) {
@@ -76,17 +76,19 @@ export function resolveNamespace(flag, hub, env = process.env) {
   return flag ?? env.TWEXTHUB_NAMESPACE ?? storedCredentialsFor(hub).namespace;
 }
 
-async function hubRequest(base, path, { method = "GET", token, body } = {}) {
+async function hubRequest(base, path, { method = "GET", token, body, raw, contentType } = {}) {
   const url = `${base.replace(/\/+$/, "")}/${String(path).replace(/^\/+/, "")}`;
   let response;
   try {
     response = await fetch(url, {
       method,
       headers: {
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...(body === undefined && raw === undefined
+          ? {}
+          : { "content-type": contentType ?? "application/json" }),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
       redirect: "error",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -125,11 +127,15 @@ export async function acceptTerms(base, token) {
   return hubRequest(base, "/terms/accept", { method: "POST", token });
 }
 
-export async function publishVersion(base, token, namespace, id, manifest, code) {
+// Publishes a gzipped tarball of the project directory. The hub extracts
+// twext.yml, validates it, and compiles the extension itself; the manifest is
+// derived from the uploaded project, not sent separately.
+export async function publishTarball(base, token, namespace, id, tarball) {
   return hubRequest(base, `/@${namespace}/${id}/versions`, {
     method: "POST",
     token,
-    body: { manifest, code },
+    raw: tarball,
+    contentType: "application/gzip",
   });
 }
 

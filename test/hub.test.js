@@ -47,12 +47,16 @@ function createHub(routes) {
   const server = createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
-    const raw = Buffer.concat(chunks).toString("utf8");
+    const raw = Buffer.concat(chunks);
+    const text = raw.toString("utf8");
     const request = {
       method: req.method,
       path: req.url.split("?")[0],
       authorization: req.headers.authorization ?? null,
-      body: raw ? JSON.parse(raw) : null,
+      contentType: req.headers["content-type"] ?? null,
+      rawBody: raw,
+      body:
+        text && req.headers["content-type"]?.includes("application/json") ? JSON.parse(text) : null,
     };
     requests.push(request);
     const route = routes.find((r) => r.method === request.method && r.path === request.path);
@@ -107,6 +111,7 @@ test("login stores credentials and publish auto-accepts terms with a session tok
             version: "1.0.0",
             status: "published",
             dist: { downloadUrl: "https://hub.test/x.js" },
+            buildLog: "warn: something noticed during the server build",
           },
         };
       },
@@ -145,8 +150,15 @@ test("login stores credentials and publish auto-accepts terms with a session tok
     assert.equal(publishes.length, 2, "re-published after accepting terms");
     assert.equal(publishes[0].authorization, "Bearer sess-1");
     assert.equal(publishes[1].authorization, "Bearer sess-1");
-    assert.ok(publishes[1].body.code.includes("class SuperUtilitiesExtension"));
-    assert.equal(publishes[1].body.manifest.id, "superutilities");
+    assert.match(publish.stderr, /warn: something noticed during the server build/);
+    assert.ok(
+      publishes.every((r) => r.rawBody?.length > 0),
+      "publish bodies are non-empty upload payloads",
+    );
+    assert.ok(
+      publishes.every((r) => r.contentType === "application/gzip"),
+      "publishes upload a gzip tarball",
+    );
   } finally {
     cleanup();
     await hub.close();
@@ -539,7 +551,7 @@ test("resolveHubUrl falls back to the public hub", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(
       result.stdout.trim(),
-      "https://twexts.sdisk.us/api/v0 https://example.com/v0 https://custom.test",
+      "https://twexts.sdisk.us/api/v1 https://example.com/v0 https://custom.test",
     );
   } finally {
     cleanup();
